@@ -20,7 +20,7 @@ export default function SignUpForm() {
         try {
             await auth.signup(email, password, fullName);
             // Redirect to home page instead of dashboard
-            router.push('/');
+            router.push('/dashboard');
         } catch (err: any) {
             setError(err.response?.data?.error || err.message || 'An error occurred during signup');
         } finally {

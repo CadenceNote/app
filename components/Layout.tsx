@@ -69,7 +69,7 @@ const Layout = ({ children }) => {
                 </button>
 
                 {isDropdownOpen && (
-                    <div className="absolute right-0 mt-1 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                    <div className="absolute right-0 mt-1 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
                         <div className="py-1" role="menu" aria-orientation="vertical">
                             <div className="px-4 py-2 text-sm text-gray-600 border-b">
                                 {user?.email}

@@ -19,7 +19,7 @@ export default function LoginForm() {
         try {
             await auth.login(email, password);
             // Redirect to home page instead of dashboard
-            router.push('/');
+            router.push('/dashboard');
         } catch (err: any) {
             setError(err.message);
         } finally {
