@@ -2,7 +2,7 @@ import axios from 'axios';
 import { supabase } from '@/lib/supabase';
 
 const api = axios.create({
-    baseURL: 'http://127.0.0.1:8000/api',
+    baseURL: 'http://localhost:8000/api',
     headers: {
         'Content-Type': 'application/json',
     },
@@ -76,7 +76,12 @@ export const auth = {
     },
 
     async logout() {
-        await supabase.auth.signOut();
+        try {
+            await supabase.auth.signOut();
+        } catch (error) {
+            console.error('Logout error:', error);
+            throw error;
+        }
     },
 
     async getCurrentSession() {
