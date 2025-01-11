@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { User, UserCircle, LogOut, ChevronDown } from 'lucide-react';
 import { auth } from '@/services/api';
 import { supabase } from '@/lib/supabase';
-
+import { User, UserCircle, LogOut, ChevronDown, LayoutDashboard } from 'lucide-react';
 /*
 *   Starting Layout Component Wrapper, used to wrap all pages that requires a LOGO + NAVIGATION + SIGN IN/OUT + FOOTER
 */
@@ -39,50 +38,62 @@ const Layout = ({ children }) => {
         }
     };
 
-    const UserMenu = () => (
-        <div className="relative">
-            <button
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
+    const UserMenu = () => {
+        const closeTimeout = React.useRef(null);
+
+        const handleMouseEnter = () => {
+            if (closeTimeout.current) {
+                clearTimeout(closeTimeout.current);
+            }
+            setIsDropdownOpen(true);
+        };
+
+        const handleMouseLeave = () => {
+            closeTimeout.current = setTimeout(() => {
+                setIsDropdownOpen(false);
+            }, 300);
+        };
+
+        return (
+            <div
+                className="relative"
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
             >
-                <UserCircle className="h-8 w-8" />
-                <ChevronDown className="h-4 w-4" />
-            </button>
-
-            {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
-                    <div
-                        className="py-1"
-                        role="menu"
-                        aria-orientation="vertical"
-                    >
-                        <div className="px-4 py-2 text-sm text-gray-700 border-b">
-                            {user?.email}
-                        </div>
-
-                        <Link
-                            href="/profile"
-                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            onClick={() => setIsDropdownOpen(false)}
-                        >
-                            Profile Settings
-                        </Link>
-
-                        <button
-                            onClick={() => {
-                                setIsDropdownOpen(false);
-                                handleSignOut();
-                            }}
-                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                            Sign Out
-                        </button>
+                <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
+                    <div className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        <span>{user?.email?.split('@')[0]}</span>
                     </div>
-                </div>
-            )}
-        </div>
-    );
+                    <ChevronDown className="h-4 w-4" />
+                </button>
 
+                {isDropdownOpen && (
+                    <div className="absolute right-0 mt-1 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                        <div className="py-1" role="menu" aria-orientation="vertical">
+                            <div className="px-4 py-2 text-sm text-gray-600 border-b">
+                                {user?.email}
+                            </div>
+
+                            <Link
+                                href="/profile"
+                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                                Profile Settings
+                            </Link>
+
+                            <button
+                                onClick={handleSignOut}
+                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                                Sign Out
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
     // Click outside handler
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -109,7 +120,16 @@ const Layout = ({ children }) => {
                         {/* Navigation */}
                         <nav className="flex items-center space-x-4">
                             {user ? (
-                                <UserMenu />
+                                <>
+                                    <Link
+                                        href="/dashboard"
+                                        className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2"
+                                    >
+                                        <LayoutDashboard className="h-4 w-4" />
+                                        Dashboard
+                                    </Link>
+                                    <UserMenu />
+                                </>
                             ) : (
                                 <>
                                     <Link
