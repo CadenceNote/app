@@ -122,7 +122,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 {/* Project Header */}
                 <div className="p-4 border-b flex items-center gap-2">
                     {!isCollapsed && (
-                        <div className="font-medium truncate">My workspace</div>
+                        <div className="text-m,d truncate">My workspace</div>
                     )}
                     <Button
                         variant="ghost"
