@@ -2,13 +2,8 @@ export type TeamRole = 'member' | 'admin' | 'meeting_manager';
 
 export interface TeamMember {
     id: number;
-    user_id: number;
-    team_id: number;
-    role: TeamRole;
-    user: {
-        email: string;
-        full_name: string;
-    };
+    name: string;
+    role: string;
 }
 
 export interface Team {

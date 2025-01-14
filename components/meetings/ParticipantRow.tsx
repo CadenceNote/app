@@ -1,21 +1,71 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Edit } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import type { MeetingNotes } from '@/lib/types/meeting';
+import { meetingApi } from '@/services/meetingApi';
+import { useToast } from '@/hooks/use-toast';
 
 interface ParticipantRowProps {
     userName: string;
     notes: MeetingNotes;
     canEdit: boolean;
     onNotesUpdate: (notes: MeetingNotes) => void;
+    teamId: number;
+    meetingId: number;
+    userId: number;
 }
 
-export function ParticipantRow({ userName, notes, canEdit, onNotesUpdate }: ParticipantRowProps) {
+const COMMAND_REGEX = /^\/task\s+(.+?)(?:\s+@(\w+))?(?:\s+!(\w+))?(?:\s+due\s+(.+?))?(?:\s+#(\w+))?$/;
+
+export function ParticipantRow({ userName, notes, canEdit, onNotesUpdate, teamId, meetingId, userId }: ParticipantRowProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editedNotes, setEditedNotes] = useState(notes);
+    const { toast } = useToast();
+
+    const handleNoteChange = useCallback(async (value: string, type: keyof typeof notes, index: number) => {
+        // Check if the input is a task command
+        if (value.startsWith('/task')) {
+            const match = value.match(COMMAND_REGEX);
+            if (match) {
+                const [_, title, assignee, priority, dueDate, tag] = match;
+                try {
+                    const task = await meetingApi.createTaskFromNote(teamId, meetingId, {
+                        title,
+                        assignee_id: userId, // You might want to lookup the assignee ID based on the @mention
+                        priority: priority?.toUpperCase() as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
+                        due_date: dueDate,
+                        description: `Created from meeting note\nTag: ${tag || 'none'}`
+                    });
+
+                    // Replace the command with a task reference
+                    const newItems = [...editedNotes[type]];
+                    newItems[index] = `[Task-${task.id}] ${title}`;
+                    setEditedNotes({ ...editedNotes, [type]: newItems });
+
+                    toast({
+                        title: "Task Created",
+                        description: `Task "${title}" has been created successfully.`
+                    });
+                } catch (err) {
+                    console.error('Failed to create task:', err);
+                    toast({
+                        title: "Error",
+                        description: "Failed to create task",
+                        variant: "destructive"
+                    });
+                }
+                return;
+            }
+        }
+
+        // Handle normal note updates
+        const newItems = [...editedNotes[type]];
+        newItems[index] = value;
+        setEditedNotes({ ...editedNotes, [type]: newItems });
+    }, [editedNotes, teamId, meetingId, userId, toast]);
 
     const handleSave = () => {
         onNotesUpdate(editedNotes);
@@ -41,11 +91,7 @@ export function ParticipantRow({ userName, notes, canEdit, onNotesUpdate }: Part
                     <div key={index} className="flex gap-2">
                         <Input
                             value={item}
-                            onChange={(e) => {
-                                const newItems = [...editedNotes[type]];
-                                newItems[index] = e.target.value;
-                                setEditedNotes({ ...editedNotes, [type]: newItems });
-                            }}
+                            onChange={(e) => handleNoteChange(e.target.value, type, index)}
                             className="text-sm"
                         />
                         <Button

@@ -1,190 +1,100 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Calendar, Clock, Users, Edit, AlertCircle, Plus } from 'lucide-react';
-import { Input } from "@/components/ui/input";
-import type { Meeting } from '@/lib/types/meeting';
-
-// Mock data
-const mockMeetingData: Meeting = {
-    id: 1,
-    date: new Date(),
-    type: "Daily Standup",
-    duration: "15 minutes",
-    goal: "Daily sync and blockers discussion",
-    participants: [
-        { id: 1, name: "John Doe", role: "Frontend Dev" },
-        { id: 2, name: "Jane Smith", role: "Backend Dev" },
-        { id: 3, name: "Mike Johnson", role: "Designer" },
-    ],
-    notes: {
-        "John Doe": {
-            todo: ["Implement user dashboard", "Fix navigation bug"],
-            blockers: ["Waiting for API endpoint"],
-            done: ["Complete authentication flow"]
-        },
-        "Jane Smith": {
-            todo: ["Setup database schema", "Create API docs"],
-            blockers: [],
-            done: ["Deploy backend service"]
-        },
-        "Mike Johnson": {
-            todo: ["Design system updates"],
-            blockers: ["Waiting for content"],
-            done: ["Homepage mockups"]
-        }
-    }
-};
+import { Plus, Users } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { meetingApi } from '@/services/meetingApi';
+import { TeamMember } from '@/lib/types/team';
+import { ParticipantRow } from './ParticipantRow';
+import { MeetingParticipantsModal } from './MeetingParticipantsModal';
+import { Meeting } from '@/lib/types/meeting';
 
 interface MeetingNotesProps {
-    teamId: string;
+    teamId: number;
+    meetingId: number;
 }
 
-export function MeetingNotes({ teamId }: MeetingNotesProps) {
-    const [meeting, setMeeting] = useState<Meeting>(mockMeetingData);
-    const currentUser = "John Doe"; // This would come from auth context
+export function MeetingNotes({ teamId, meetingId }: MeetingNotesProps) {
+    const [meeting, setMeeting] = useState<Meeting | null>(null);
+    const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
+    const { toast } = useToast();
 
-    const handleUpdateNote = (userName: string, type: 'todo' | 'blockers' | 'done', index: number, value: string) => {
-        setMeeting(prev => ({
-            ...prev,
-            notes: {
-                ...prev.notes,
-                [userName]: {
-                    ...prev.notes[userName],
-                    [type]: prev.notes[userName][type].map((item, i) => i === index ? value : item)
-                }
-            }
-        }));
+    const fetchMeetingData = async () => {
+        try {
+            const data = await meetingApi.getMeeting(teamId, meetingId);
+            setMeeting(data);
+        } catch (error) {
+            console.error('Failed to fetch meeting data:', error);
+            toast({
+                title: "Error",
+                description: "Failed to load meeting data",
+                variant: "destructive"
+            });
+        }
     };
 
-    const handleAddNote = (userName: string, type: 'todo' | 'blockers' | 'done') => {
-        setMeeting(prev => ({
-            ...prev,
-            notes: {
-                ...prev.notes,
-                [userName]: {
-                    ...prev.notes[userName],
-                    [type]: [...prev.notes[userName][type], ""]
-                }
-            }
-        }));
+    useEffect(() => {
+        fetchMeetingData();
+    }, [teamId, meetingId]);
+
+    const handleNotesUpdate = async (userId: number, notes: any) => {
+        try {
+            await meetingApi.updateNotes(teamId, meetingId, userId, notes);
+            await fetchMeetingData(); // Refresh data after update
+        } catch (error) {
+            console.error('Failed to update notes:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update notes",
+                variant: "destructive"
+            });
+        }
     };
 
-    const handleRemoveNote = (userName: string, type: 'todo' | 'blockers' | 'done', index: number) => {
-        setMeeting(prev => ({
-            ...prev,
-            notes: {
-                ...prev.notes,
-                [userName]: {
-                    ...prev.notes[userName],
-                    [type]: prev.notes[userName][type].filter((_, i) => i !== index)
-                }
-            }
-        }));
-    };
+    if (!meeting) {
+        return <div>Loading...</div>;
+    }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Daily Standup Notes</CardTitle>
-                        <div className="flex gap-4 text-sm text-gray-600 mt-1">
-                            <span className="flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
-                                {meeting.date.toLocaleDateString()}
-                            </span>
-                            <span className="flex items-center gap-1">
-                                <Clock className="h-4 w-4" />
-                                {meeting.duration}
-                            </span>
-                        </div>
-                    </div>
-                    <Button variant="outline" size="sm">End Meeting</Button>
+                    <CardTitle>{meeting.title}</CardTitle>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsParticipantsModalOpen(true)}
+                    >
+                        <Users className="h-4 w-4 mr-2" />
+                        Manage Participants
+                    </Button>
                 </CardHeader>
-
-                <CardContent>
-                    <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
-                            <thead>
-                                <tr>
-                                    <th className="border-b py-2 px-4 text-left font-medium w-[200px]">Team Member</th>
-                                    <th className="border-b py-2 px-4 text-left font-medium bg-red-50">
-                                        <span className="text-red-600">TODO</span>
-                                    </th>
-                                    <th className="border-b py-2 px-4 text-left font-medium bg-yellow-50">
-                                        <span className="text-yellow-600">BLOCKERS</span>
-                                    </th>
-                                    <th className="border-b py-2 px-4 text-left font-medium bg-green-50">
-                                        <span className="text-green-600">DONE</span>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {Object.entries(meeting.notes).map(([userName, notes]) => (
-                                    <tr key={userName} className="border-b last:border-b-0">
-                                        <td className="py-3 px-4">
-                                            <div className="font-medium">{userName}</div>
-                                            <div className="text-sm text-gray-500">
-                                                {meeting.participants.find(p => p.name === userName)?.role}
-                                            </div>
-                                        </td>
-                                        {(['todo', 'blockers', 'done'] as const).map((type) => (
-                                            <td key={type} className={`py-3 px-4 align-top ${type === 'todo' ? 'bg-red-50' :
-                                                type === 'blockers' ? 'bg-yellow-50' : 'bg-green-50'
-                                                }`}>
-                                                <div className="space-y-2">
-                                                    {notes[type].map((item, index) => (
-                                                        <div key={index} className="flex gap-2">
-                                                            <Input
-                                                                value={item}
-                                                                onChange={(e) => handleUpdateNote(userName, type, index, e.target.value)}
-                                                                className="text-sm"
-                                                                placeholder={`Add ${type}...`}
-                                                                disabled={userName !== currentUser}
-                                                            />
-                                                            {userName === currentUser && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => handleRemoveNote(userName, type, index)}
-                                                                >
-                                                                    ×
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                    {userName === currentUser && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => handleAddNote(userName, type)}
-                                                            className="w-full justify-start"
-                                                        >
-                                                            <Plus className="h-4 w-4 mr-2" />
-                                                            Add {type}
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                <CardContent className="space-y-4">
+                    {meeting.participants.map((participant) => (
+                        <ParticipantRow
+                            key={participant.id}
+                            userName={participant.name}
+                            notes={meeting.notes[participant.id] || { todo: [], blockers: [], done: [] }}
+                            canEdit={true} // TODO: Add proper permission check
+                            onNotesUpdate={(notes) => handleNotesUpdate(participant.id, notes)}
+                            teamId={teamId}
+                            meetingId={meetingId}
+                            userId={participant.id}
+                        />
+                    ))}
                 </CardContent>
             </Card>
 
-            <Alert className="bg-blue-50">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                    Changes are automatically saved and shared with the team in real-time.
-                </AlertDescription>
-            </Alert>
+            <MeetingParticipantsModal
+                open={isParticipantsModalOpen}
+                onOpenChange={setIsParticipantsModalOpen}
+                teamId={teamId}
+                meetingId={meetingId}
+                currentParticipants={meeting.participants}
+                onParticipantsUpdate={fetchMeetingData}
+            />
         </div>
     );
 }
