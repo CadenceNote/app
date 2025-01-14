@@ -14,14 +14,15 @@ interface Meeting {
     type: 'daily' | 'planning' | 'review' | 'retrospective' | 'adhoc';
     status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
     participants: TeamMember[];
-    notes: Record<number, ParticipantNotes>;
+    notes: Record<string, ParticipantNotes>;
 }
 
 interface CreateMeetingInput {
     title: string;
-    date: string;
-    type: Meeting['type'];
     description?: string;
+    type: Meeting['type'];
+    start_time: string;
+    duration_minutes: number;
     participant_ids: number[];
 }
 
@@ -45,10 +46,10 @@ export const meetingApi = {
     },
 
     // Update meeting participants
-    updateParticipants: async (teamId: number, meetingId: number, participantIds: number[]): Promise<Meeting> => {
+    updateParticipants: async (teamId: number, meetingId: number, data: { participant_ids: number[] }): Promise<Meeting> => {
         const response = await api.post(
             `/teams/${teamId}/meetings/${meetingId}/update-participants/`,
-            { participant_ids: participantIds }
+            data
         );
         return response.data;
     },
@@ -60,7 +61,10 @@ export const meetingApi = {
         userId: number,
         notes: ParticipantNotes
     ): Promise<void> => {
-        await api.post(`/teams/${teamId}/meetings/${meetingId}/notes/${userId}/`, notes);
+        await api.post(
+            `/teams/${teamId}/meetings/${meetingId}/participants/${userId}/notes/`,
+            notes
+        );
     },
 
     // Create task from note
@@ -74,7 +78,7 @@ export const meetingApi = {
             due_date?: string;
             description?: string;
         }
-    ): Promise<any> => {
+    ): Promise<Task> => {
         const response = await api.post(
             `/teams/${teamId}/meetings/${meetingId}/create-task/`,
             data
@@ -83,13 +87,13 @@ export const meetingApi = {
     },
 
     // Get meeting templates
-    getTemplates: async (teamId: number): Promise<any[]> => {
+    getTemplates: async (teamId: number): Promise<MeetingTemplate[]> => {
         const response = await api.get(`/teams/${teamId}/meeting-templates/`);
         return response.data.templates;
     },
 
     // Create meeting template
-    createTemplate: async (teamId: number, data: any): Promise<any> => {
+    createTemplate: async (teamId: number, data: CreateMeetingTemplateInput): Promise<MeetingTemplate> => {
         const response = await api.post(`/teams/${teamId}/meeting-templates/create/`, data);
         return response.data.template;
     }

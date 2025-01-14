@@ -161,8 +161,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <div className="p-2 border-t space-y-1">
                     <SidebarItem
                         icon={<Settings className="h-4 w-4" />}
-                        label="Edit workspace"
+                        label="Settings"
                         href="/dashboard/settings"
+                        isCollapsed={isCollapsed}
+                    />
+                    <SidebarItem
+                        icon={<Users className="h-4 w-4" />}
+                        label="Profile"
+                        href="/dashboard/profile"
                         isCollapsed={isCollapsed}
                     />
                     <SidebarItem

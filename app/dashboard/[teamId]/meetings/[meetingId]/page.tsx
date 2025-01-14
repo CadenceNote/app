@@ -20,6 +20,7 @@ export default function TeamMeetingsPage() {
         <div className="container mx-auto p-6">
             <MeetingHeader
                 teamId={teamId}
+                meetingId={meetingId}
                 onCreateMeeting={() => setIsCreateModalOpen(true)}
             />
             <MeetingNotes
