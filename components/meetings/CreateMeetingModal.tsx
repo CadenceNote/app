@@ -99,18 +99,8 @@ export function CreateMeetingModal({ open, onClose, teamId }: CreateMeetingModal
         setLoading(true);
 
         try {
-            // Create a date object in local time
-            const localDate = new Date(`${formData.date}T${formData.time}`);
-
-            // Convert to UTC string and format it
-            const utcHours = localDate.getUTCHours().toString().padStart(2, '0');
-            const utcMinutes = localDate.getUTCMinutes().toString().padStart(2, '0');
-            const utcYear = localDate.getUTCFullYear();
-            const utcMonth = (localDate.getUTCMonth() + 1).toString().padStart(2, '0');
-            const utcDay = localDate.getUTCDate().toString().padStart(2, '0');
-
-            // Format in the exact format the backend expects
-            const formattedDateTime = `${utcYear}-${utcMonth}-${utcDay}T${utcHours}:${utcMinutes}:00Z`;
+            // Format the date string manually to match backend's expected format exactly
+            const formattedDateTime = `${formData.date}T${formData.time}:00Z`;
 
             const payload = {
                 title: formData.title,
