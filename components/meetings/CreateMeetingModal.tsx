@@ -99,18 +99,14 @@ export function CreateMeetingModal({ open, onClose, teamId }: CreateMeetingModal
         setLoading(true);
 
         try {
-            // Create a Date object and format it properly
-            const dateTimeStr = `${formData.date}T${formData.time}:00`;
-            const date = new Date(dateTimeStr);
-
-            // Ensure the date is in correct ISO format with UTC
-            const isoDateTime = date.toISOString();
+            // Format the date string manually to match backend's expected format exactly
+            const formattedDateTime = `${formData.date}T${formData.time}:00Z`;
 
             const payload = {
                 title: formData.title,
                 description: formData.description,
                 type: formData.type,
-                start_time: isoDateTime,
+                start_time: formattedDateTime,
                 duration_minutes: formData.duration_minutes,
                 participant_ids: formData.participant_ids
             };
