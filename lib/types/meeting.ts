@@ -6,6 +6,13 @@ export enum MeetingType {
     ADHOC = 'adhoc'
 }
 
+export enum MeetingStatus {
+    SCHEDULED = 'scheduled',
+    IN_PROGRESS = 'in_progress',
+    COMPLETED = 'completed',
+    CANCELLED = 'cancelled'
+}
+
 export interface Participant {
     id: number;
     name: string;
@@ -14,16 +21,16 @@ export interface Participant {
 
 export interface TaskSuggestion {
     id: number;
+    team_ref_number: number;
     title: string;
-    status: string;
-    assignee?: string;
+    status: 'TODO' | 'IN_PROGRESS' | 'DONE';
 }
 
 export interface UserMention {
     id: number;
     name: string;
     email: string;
-    avatar?: string;
+    avatar: string;
 }
 
 export interface InlineTask {
@@ -64,11 +71,11 @@ export interface MeetingNotes {
 export interface Meeting {
     id: number;
     title: string;
-    date: Date;
+    description?: string;
     type: MeetingType;
-    duration: string;
-    status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
-    goal?: string;
+    status: MeetingStatus;
+    duration_minutes: number;
+    start_time: string;
     participants: Participant[];
     notes: Record<string, MeetingNotes>;
     summary?: string;

@@ -15,7 +15,7 @@ import { Meeting, MeetingType } from '@/lib/types/meeting';
 import { format, parseISO } from 'date-fns';
 
 interface MeetingListProps {
-    teamId: string;
+    teamId: number;
 }
 
 const MEETING_TYPE_LABELS: Record<MeetingType, string> = {

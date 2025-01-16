@@ -39,6 +39,14 @@ interface Task {
     status: string;
 }
 
+interface UserSearchResponse {
+    users: Array<{
+        id: number;
+        name: string;
+        email: string;
+    }>;
+}
+
 export const meetingApi = {
     // Get a specific meeting
     getMeeting: async (teamId: number, meetingId: number): Promise<Meeting> => {
@@ -67,11 +75,11 @@ export const meetingApi = {
     },
 
     // Search users
-    searchUsers: async (teamId: number, query: string): Promise<UserMention[]> => {
+    searchUsers: async (teamId: number, query: string): Promise<UserSearchResponse> => {
         const response = await api.get(`/teams/${teamId}/users/search/`, {
             params: { query }
         });
-        return response.data.users;
+        return response.data;
     },
 
     // Create task from note

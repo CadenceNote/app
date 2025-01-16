@@ -1,7 +1,7 @@
 // components/tasks/TaskList.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Table,
     TableBody,
@@ -14,8 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
     Search,
-    ArrowUpDown,
     ChevronDown,
+    Plus
 } from 'lucide-react';
 import {
     Select,
@@ -30,66 +30,20 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Task, TaskStatus } from '@/lib/types/task';
 import { TaskDetail } from './TaskDetail';
-interface Task {
-    id: number;
-    key: string;
-    description: string;
-    assignee: string;
-    status: 'Todo' | 'In Progress' | 'Done' | 'Blocked';
-    reporter: string;
-    type: 'Feature' | 'Bug' | 'Task' | 'Epic';
-    priority: 'Low' | 'Medium' | 'High';
-    start: string;
-    end: string;
-}
+import { taskApi } from '@/services/taskApi';
+import { useToast } from '@/hooks/use-toast';
 
-// Mock data
-const mockTasks: Task[] = [
-    {
-        id: 1,
-        key: "FE-101",
-        description: "Implement user dashboard",
-        assignee: "John Doe",
-        status: "In Progress",
-        type: "Feature",
-        start: "2025-01-01",
-        end: "2025-01-15",
-        reporter: "Alice Johnson",
-        priority: 'Low'
-    },
-    {
-        id: 2,
-        key: "BE-203",
-        description: "API Authentication endpoints",
-        assignee: "Jane Smith",
-        status: "Todo",
-        start: "2025-01-15",
-        end: "2025-01-30",
-        reporter: "Bob Brown",
-        type: 'Feature',
-        priority: 'Low'
-    },
-    {
-        id: 3,
-        key: "FE-102",
-        description: "Fix navigation responsiveness",
-        assignee: "John Doe",
-        start: "2025-01-05",
-        end: "2025-01-12",
-        reporter: "Charlie Davis",
-        priority: "High",
-        status: 'Todo',
-        type: 'Feature'
-    }
-];
+
 
 interface TaskListProps {
-    teamId: string;
+    teamId: number;
 }
 
 export function TaskList({ teamId }: TaskListProps) {
-    const [tasks, setTasks] = useState<Task[]>(mockTasks);
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [filters, setFilters] = useState({
         assignee: 'all',
         status: 'all',
@@ -98,6 +52,79 @@ export function TaskList({ teamId }: TaskListProps) {
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const { toast } = useToast();
+
+    // Fetch tasks
+    const fetchTasks = async () => {
+        try {
+            setIsLoading(true);
+            const statusFilter = filters.status !== 'all' ? [filters.status as TaskStatus] : undefined;
+            const assigneeFilter = filters.assignee !== 'all' ? parseInt(filters.assignee) : undefined;
+
+            const fetchedTasks = await taskApi.listTasks(teamId, {
+                status: statusFilter,
+                assignee_id: assigneeFilter,
+                search: searchTerm || undefined
+            });
+            setTasks(fetchedTasks);
+        } catch (error) {
+            console.error('Failed to fetch tasks:', error);
+            toast({
+                title: "Error",
+                description: "Failed to load tasks. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Fetch tasks on mount and when filters change
+    useEffect(() => {
+        fetchTasks();
+    }, [teamId, filters, searchTerm]);
+
+    const handleCreateTask = () => {
+        setSelectedTask(null);
+        setIsCreateOpen(true);
+    };
+
+    const handleTaskUpdate = async (taskId: number, data: Partial<Task>) => {
+        try {
+            await taskApi.updateTask(teamId, taskId, data);
+            fetchTasks(); // Refresh the list
+            toast({
+                title: "Success",
+                description: "Task updated successfully",
+            });
+        } catch (error) {
+            console.error('Failed to update task:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update task. Please try again.",
+                variant: "destructive"
+            });
+        }
+    };
+
+    const handleTaskDelete = async (taskId: number) => {
+        try {
+            await taskApi.deleteTask(teamId, taskId);
+            fetchTasks(); // Refresh the list
+            toast({
+                title: "Success",
+                description: "Task deleted successfully",
+            });
+        } catch (error) {
+            console.error('Failed to delete task:', error);
+            toast({
+                title: "Error",
+                description: "Failed to delete task. Please try again.",
+                variant: "destructive"
+            });
+        }
+    };
+
     const getStatusColor = (status: Task['status']) => {
         const colors = {
             'Todo': 'bg-gray-100 text-gray-800',
@@ -117,18 +144,11 @@ export function TaskList({ teamId }: TaskListProps) {
         return colors[priority] || colors['Low'];
     };
 
-    const filteredTasks = tasks.filter(task => {
-        const matchesSearch = task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            task.key.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesAssignee = filters.assignee === 'all' || task.assignee.toLowerCase() === filters.assignee.toLowerCase();
-        const matchesStatus = filters.status === 'all' || task.status.toLowerCase() === filters.status.toLowerCase();
-
-        return matchesSearch && matchesAssignee && matchesStatus;
-    });
     const handleRowClick = (task: Task) => {
         setSelectedTask(task);
         setIsDetailOpen(true);
     };
+
     return (
         <div className="bg-white rounded-lg shadow">
             <div className="p-4 border-b flex items-center gap-4">
@@ -152,25 +172,16 @@ export function TaskList({ teamId }: TaskListProps) {
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="todo">Todo</SelectItem>
-                        <SelectItem value="in progress">In Progress</SelectItem>
-                        <SelectItem value="done">Done</SelectItem>
-                        <SelectItem value="blocked">Blocked</SelectItem>
+                        <SelectItem value={TaskStatus.TODO}>Todo</SelectItem>
+                        <SelectItem value={TaskStatus.IN_PROGRESS}>In Progress</SelectItem>
+                        <SelectItem value={TaskStatus.DONE}>Done</SelectItem>
+                        <SelectItem value={TaskStatus.BLOCKED}>Blocked</SelectItem>
                     </SelectContent>
                 </Select>
-                <Select
-                    value={filters.assignee}
-                    onValueChange={(value) => setFilters(prev => ({ ...prev, assignee: value }))}
-                >
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Filter by assignee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Assignees</SelectItem>
-                        <SelectItem value="john doe">John Doe</SelectItem>
-                        <SelectItem value="jane smith">Jane Smith</SelectItem>
-                    </SelectContent>
-                </Select>
+                <Button onClick={handleCreateTask}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Task
+                </Button>
             </div>
 
             <div className="overflow-x-auto">
@@ -178,7 +189,7 @@ export function TaskList({ teamId }: TaskListProps) {
                     <TableHeader>
                         <TableRow>
                             <TableHead className="w-[100px]">Key</TableHead>
-                            <TableHead>Description</TableHead>
+                            <TableHead>Title</TableHead>
                             <TableHead>Assignee</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Type</TableHead>
@@ -188,14 +199,26 @@ export function TaskList({ teamId }: TaskListProps) {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredTasks.map((task) => (
+                        {isLoading ? (
+                            <TableRow>
+                                <TableCell colSpan={8} className="text-center py-8">
+                                    Loading tasks...
+                                </TableCell>
+                            </TableRow>
+                        ) : tasks.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={8} className="text-center py-8">
+                                    No tasks found
+                                </TableCell>
+                            </TableRow>
+                        ) : tasks.map((task) => (
                             <TableRow
                                 key={task.id}
                                 className="cursor-pointer hover:bg-gray-50"
                                 onClick={() => handleRowClick(task)}
                             >
-                                <TableCell className="font-medium">{task.key}</TableCell>
-                                <TableCell>{task.description}</TableCell>
+                                <TableCell className="font-medium">T-{task.team_ref_number}</TableCell>
+                                <TableCell>{task.title}</TableCell>
                                 <TableCell>{task.assignee}</TableCell>
                                 <TableCell>
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
@@ -210,11 +233,11 @@ export function TaskList({ teamId }: TaskListProps) {
                                 </TableCell>
                                 <TableCell>
                                     <div className="text-sm">
-                                        <div>Start: {task.start}</div>
-                                        <div>End: {task.end}</div>
+                                        <div>Start: {task.startDate ? task.startDate.toISOString().split('T')[0] : 'Not set'}</div>
+                                        <div>End: {task.dueDate ? task.dueDate.toISOString().split('T')[0] : 'Not set'}</div>
                                     </div>
                                 </TableCell>
-                                <TableCell>
+                                <TableCell onClick={(e) => e.stopPropagation()}>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button variant="ghost" size="sm">
@@ -222,9 +245,15 @@ export function TaskList({ teamId }: TaskListProps) {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem>Edit</DropdownMenuItem>
-                                            <DropdownMenuItem>Change Status</DropdownMenuItem>
-                                            <DropdownMenuItem>Delete</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task.id, { status: TaskStatus.IN_PROGRESS })}>
+                                                Start Progress
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task.id, { status: TaskStatus.DONE })}>
+                                                Mark as Done
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleTaskDelete(task.id)} className="text-red-600">
+                                                Delete
+                                            </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </TableCell>
@@ -232,25 +261,29 @@ export function TaskList({ teamId }: TaskListProps) {
                         ))}
                     </TableBody>
                 </Table>
-
             </div>
+
             {selectedTask && (
                 <TaskDetail
                     isOpen={isDetailOpen}
                     onClose={() => {
                         setIsDetailOpen(false);
                         setSelectedTask(null);
+                        fetchTasks(); // Refresh after closing detail view
                     }}
                     task={selectedTask}
+                    teamId={teamId}
                 />
             )}
 
             <TaskDetail
                 isOpen={isCreateOpen}
-                onClose={() => setIsCreateOpen(false)}
-                isEditing={true}
+                onClose={() => {
+                    setIsCreateOpen(false);
+                    fetchTasks(); // Refresh after closing create view
+                }}
+                teamId={teamId}
             />
         </div>
-
     );
 }
