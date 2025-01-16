@@ -7,50 +7,58 @@ import { Users, Target, ListTodo } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { meetingApi } from '@/services/meetingApi';
 import { MeetingNotes as MeetingNotesType } from '@/lib/types/meeting';
-import { ParticipantRow } from './ParticipantRow';
 import { MeetingParticipantsModal } from './MeetingParticipantsModal';
-import { TeamMember } from '@/lib/types/team';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { TeamRole } from '@/lib/types/team';
+import { StandupNotes } from './StandupNotes';
+import { useUser } from '@/hooks/useUser';
 
 interface MeetingNotesProps {
     teamId: number;
     meetingId: number;
 }
 
-interface ExtendedTeamMember extends TeamMember {
+interface MeetingParticipant {
+    id: number;
     email: string;
     full_name: string;
+    role?: string;
 }
 
-interface ExtendedMeeting {
+interface MeetingResponse {
     id: number;
     title: string;
     type: string;
     status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
-    participants: ExtendedTeamMember[];
+    participants: MeetingParticipant[];
     notes: Record<string, MeetingNotesType>;
-    settings: {
+    settings?: {
         goals: string[];
         agenda: string[];
     };
 }
 
+interface ExtendedMeeting extends MeetingResponse {
+    participants: MeetingParticipant[];
+}
+
 export function MeetingNotes({ teamId, meetingId }: MeetingNotesProps) {
     const [meeting, setMeeting] = useState<ExtendedMeeting | null>(null);
     const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
+    const { user, isLoading: isUserLoading } = useUser();
+    const [currentUser, setCurrentUser] = useState<{ id: number; role: TeamRole } | null>(null);
     const { toast } = useToast();
 
     const fetchMeetingData = async () => {
         try {
             const data = await meetingApi.getMeeting(teamId, meetingId);
             const transformedData: ExtendedMeeting = {
-                id: data.id,
-                title: data.title,
-                type: data.type,
-                status: data.status,
-                participants: data.participants as ExtendedTeamMember[],
-                notes: data.notes,
-                settings: (data as any).settings || { goals: [], agenda: [] }
+                ...data,
+                participants: data.participants.map(p => ({
+                    id: p.id,
+                    email: p.email,
+                    full_name: p.full_name,
+                    role: p.role
+                }))
             };
             setMeeting(transformedData);
         } catch (error) {
@@ -64,24 +72,33 @@ export function MeetingNotes({ teamId, meetingId }: MeetingNotesProps) {
     };
 
     useEffect(() => {
-        fetchMeetingData();
-    }, [teamId, meetingId]);
+        const loadData = async () => {
+            if (!user) return;
 
-    const handleNotesUpdate = async (userId: number, notes: MeetingNotesType) => {
-        try {
-            await meetingApi.updateNotes(teamId, meetingId, userId, notes);
-            await fetchMeetingData();
-        } catch (error) {
-            console.error('Failed to update notes:', error);
-            toast({
-                title: "Error",
-                description: "Failed to update notes",
-                variant: "destructive"
-            });
+            try {
+                // Get user's role in the team - this should be cached
+                const teamData = await meetingApi.getTeamRole(teamId);
+                setCurrentUser({
+                    id: user.id,
+                    role: teamData.role
+                });
+            } catch (error) {
+                console.error('Failed to fetch user data:', error);
+                toast({
+                    title: "Error",
+                    description: "Failed to load user data",
+                    variant: "destructive"
+                });
+            }
+        };
+
+        if (!isUserLoading) {
+            loadData();
+            fetchMeetingData();
         }
-    };
+    }, [teamId, meetingId, user, isUserLoading]);
 
-    if (!meeting) return null;
+    if (!meeting || !currentUser || isUserLoading) return null;
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
@@ -161,35 +178,18 @@ export function MeetingNotes({ teamId, meetingId }: MeetingNotesProps) {
             {/* Notes Section */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Meeting Notes</CardTitle>
-                    <CardDescription>Notes and action items from each participant</CardDescription>
+                    <CardTitle>Standup Notes</CardTitle>
+                    <CardDescription>Share your updates, blockers, and completed items</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="space-y-8">
-                        {meeting.participants.map((participant) => (
-                            <div key={participant.id} className="space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8">
-                                        <AvatarImage src={`https://avatar.vercel.sh/${participant.email}`} />
-                                        <AvatarFallback>{participant.full_name.split(' ').map((n: string) => n[0]).join('')}</AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <h4 className="font-medium">{participant.full_name}</h4>
-                                        <p className="text-sm text-muted-foreground">{participant.email}</p>
-                                    </div>
-                                </div>
-                                <ParticipantRow
-                                    teamId={teamId}
-                                    meetingId={meetingId}
-                                    userId={participant.id}
-                                    userName={participant.full_name}
-                                    notes={meeting.notes[participant.id.toString()] || { todo: [], blockers: [], done: [] }}
-                                    onNotesUpdate={(notes: MeetingNotesType) => handleNotesUpdate(participant.id, notes)}
-                                    canEdit={true}
-                                />
-                            </div>
-                        ))}
-                    </div>
+                    <StandupNotes
+                        teamId={teamId}
+                        meetingId={meetingId}
+                        currentUserId={currentUser.id}
+                        userRole={currentUser.role}
+                        participants={meeting.participants}
+                        onSave={fetchMeetingData}
+                    />
                 </CardContent>
             </Card>
 
