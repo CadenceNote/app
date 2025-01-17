@@ -1,5 +1,6 @@
 import api from './api';
 import { Task, TaskPriority, TaskStatus, TaskType } from '@/lib/types/task';
+import { TASK_STATUS } from '@/lib/config/taskConfig';
 
 export interface CreateTaskInput {
     title: string;
@@ -53,7 +54,11 @@ export const taskApi = {
 
     // Create a new task
     createTask: async (teamId: number, data: CreateTaskInput): Promise<Task> => {
-        const response = await api.post(`/teams/${teamId}/tasks/`, data);
+        const formattedData = {
+            ...data,
+            status: data.status || TASK_STATUS.TODO
+        };
+        const response = await api.post(`/teams/${teamId}/tasks/`, formattedData);
         return response.data;
     },
 

@@ -1,15 +1,12 @@
+import { TASK_STATUS } from '../config/taskConfig';
+
 export enum TaskPriority {
     LOW = 'Low',
     MEDIUM = 'Medium',
     HIGH = 'High'
 }
 
-export enum TaskStatus {
-    TODO = 'Todo',
-    IN_PROGRESS = 'In Progress',
-    DONE = 'Done',
-    BLOCKED = 'Blocked'
-}
+export type TaskStatus = typeof TASK_STATUS[keyof typeof TASK_STATUS];
 
 export enum TaskType {
     TASK = 'Task',

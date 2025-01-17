@@ -15,10 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
     Search,
-    Filter,
     Plus,
     ArrowUpDown,
-    AlertCircle,
     ChevronDown,
 } from 'lucide-react';
 import {
@@ -34,6 +32,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TASK_STATUS, TASK_STATUS_DISPLAY } from '@/lib/config/taskConfig';
 
 interface Task {
     id: number;
@@ -50,57 +49,12 @@ interface Task {
     reporter: string;
 }
 
-// Mock data
-const mockTasks: Task[] = [
-    {
-        id: 1,
-        key: "FE-101",
-        description: "Implement user dashboard",
-        assignee: "John Doe",
-        status: "In Progress",
-        type: "Feature",
-        priority: "High",
-        start: "2025-01-01",
-        end: "2025-01-15",
-        created: "2024-12-30",
-        updated: "2025-01-11",
-        reporter: "Jane Smith"
-    },
-    {
-        id: 2,
-        key: "BE-203",
-        description: "API Authentication endpoints",
-        assignee: "Jane Smith",
-        status: "Todo",
-        type: "Task",
-        priority: "Medium",
-        start: "2025-01-15",
-        end: "2025-01-30",
-        created: "2025-01-10",
-        updated: "2025-01-10",
-        reporter: "John Doe"
-    },
-    {
-        id: 3,
-        key: "FE-102",
-        description: "Fix navigation responsiveness",
-        assignee: "John Doe",
-        status: "Blocked",
-        type: "Bug",
-        priority: "High",
-        start: "2025-01-05",
-        end: "2025-01-12",
-        created: "2025-01-05",
-        updated: "2025-01-11",
-        reporter: "Mike Johnson"
-    }
-];
 
 export default function TasksPage() {
     const params = useParams();
     const teamId = params.teamId as string;
 
-    const [tasks, setTasks] = useState<Task[]>(mockTasks);
+    const [tasks, setTasks] = useState<Task[]>();
     const [filters, setFilters] = useState({
         assignee: '',
         status: '',
@@ -197,10 +151,11 @@ export default function TasksPage() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Statuses</SelectItem>
-                            <SelectItem value="todo">Todo</SelectItem>
-                            <SelectItem value="in-progress">In Progress</SelectItem>
-                            <SelectItem value="done">Done</SelectItem>
-                            <SelectItem value="blocked">Blocked</SelectItem>
+                            {Object.entries(TASK_STATUS).map(([key, value]) => (
+                                <SelectItem key={value} value={value}>
+                                    {TASK_STATUS_DISPLAY[value]}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     <Select
@@ -264,7 +219,7 @@ export default function TasksPage() {
                                     <TableCell>{task.assignee}</TableCell>
                                     <TableCell>
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                                            {task.status}
+                                            {TASK_STATUS_DISPLAY[task.status as keyof typeof TASK_STATUS]}
                                         </span>
                                     </TableCell>
                                     <TableCell>{task.type}</TableCell>

@@ -34,6 +34,7 @@ import { Task, TaskStatus } from '@/lib/types/task';
 import { TaskDetail } from './TaskDetail';
 import { taskApi } from '@/services/taskApi';
 import { useToast } from '@/hooks/use-toast';
+import { TASK_STATUS, TASK_STATUS_DISPLAY, getStatusDisplay } from '@/lib/config/taskConfig';
 
 
 
@@ -127,12 +128,12 @@ export function TaskList({ teamId }: TaskListProps) {
 
     const getStatusColor = (status: Task['status']) => {
         const colors = {
-            'Todo': 'bg-gray-100 text-gray-800',
-            'In Progress': 'bg-blue-100 text-blue-800',
-            'Done': 'bg-green-100 text-green-800',
-            'Blocked': 'bg-red-100 text-red-800'
+            [TASK_STATUS.TODO]: 'bg-gray-100 text-gray-800',
+            [TASK_STATUS.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
+            [TASK_STATUS.DONE]: 'bg-green-100 text-green-800',
+            [TASK_STATUS.BLOCKED]: 'bg-red-100 text-red-800'
         };
-        return colors[status] || colors['Todo'];
+        return colors[status] || colors[TASK_STATUS.TODO];
     };
 
     const getPriorityColor = (priority: Task['priority']) => {
@@ -172,10 +173,11 @@ export function TaskList({ teamId }: TaskListProps) {
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value={TaskStatus.TODO}>Todo</SelectItem>
-                        <SelectItem value={TaskStatus.IN_PROGRESS}>In Progress</SelectItem>
-                        <SelectItem value={TaskStatus.DONE}>Done</SelectItem>
-                        <SelectItem value={TaskStatus.BLOCKED}>Blocked</SelectItem>
+                        {Object.entries(TASK_STATUS).map(([key, value]) => (
+                            <SelectItem key={value} value={value}>
+                                {TASK_STATUS_DISPLAY[value]}
+                            </SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
                 <Button onClick={handleCreateTask}>
@@ -222,7 +224,7 @@ export function TaskList({ teamId }: TaskListProps) {
                                 <TableCell>{task.assignee}</TableCell>
                                 <TableCell>
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                                        {task.status}
+                                        {TASK_STATUS_DISPLAY[task.status]}
                                     </span>
                                 </TableCell>
                                 <TableCell>{task.type}</TableCell>
@@ -245,10 +247,10 @@ export function TaskList({ teamId }: TaskListProps) {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task.id, { status: TaskStatus.IN_PROGRESS })}>
+                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task.id, { status: TASK_STATUS.IN_PROGRESS })}>
                                                 Start Progress
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task.id, { status: TaskStatus.DONE })}>
+                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task.id, { status: TASK_STATUS.DONE })}>
                                                 Mark as Done
                                             </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => handleTaskDelete(task.id)} className="text-red-600">

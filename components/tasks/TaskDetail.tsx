@@ -28,6 +28,7 @@ import { format } from "date-fns";
 import { Task, TaskStatus, TaskPriority, TaskType } from '@/lib/types/task';
 import { taskApi, CreateTaskInput } from '@/services/taskApi';
 import { useToast } from '@/hooks/use-toast';
+import { TASK_STATUS } from '@/lib/config/taskConfig';
 
 
 interface TaskDetailProps {
@@ -70,7 +71,7 @@ export function TaskDetail({ isOpen, onClose, task, teamId }: TaskDetailProps) {
     const [formData, setFormData] = useState<FormData>({
         title: task?.title || '',
         description: task?.description || '',
-        status: task?.status || TaskStatus.TODO,
+        status: task?.status || TASK_STATUS.TODO,
         priority: task?.priority || TaskPriority.MEDIUM,
         type: task?.type || TaskType.TASK,
         startDate: task?.startDate,
@@ -182,10 +183,10 @@ export function TaskDetail({ isOpen, onClose, task, teamId }: TaskDetailProps) {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value={TaskStatus.TODO}>Todo</SelectItem>
-                                            <SelectItem value={TaskStatus.IN_PROGRESS}>In Progress</SelectItem>
-                                            <SelectItem value={TaskStatus.DONE}>Done</SelectItem>
-                                            <SelectItem value={TaskStatus.BLOCKED}>Blocked</SelectItem>
+                                            <SelectItem value={TASK_STATUS.TODO}>Todo</SelectItem>
+                                            <SelectItem value={TASK_STATUS.IN_PROGRESS}>In Progress</SelectItem>
+                                            <SelectItem value={TASK_STATUS.DONE}>Done</SelectItem>
+                                            <SelectItem value={TASK_STATUS.BLOCKED}>Blocked</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 }

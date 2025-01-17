@@ -28,9 +28,25 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Hash, Users, AlertCircle, CheckCircle2, Timer } from 'lucide-react';
+import { Hash, Users, CheckCircle2, Trash2, Save } from 'lucide-react';
+import { TASK_STATUS, TASK_STATUS_DISPLAY } from '@/lib/config/taskConfig';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { TeamMember } from '@/lib/types/team';
+import { MeetingNotes } from '@/lib/types/meeting';
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 interface StandupNotesProps {
     teamId: number;
@@ -63,8 +79,8 @@ interface SuggestionState {
     type: 'task' | 'user' | 'task_command' | null;
     query: string;
     position: {
-        top: string | number;
-        bottom: string | number;
+        top: number | null;
+        bottom: number | null;
         left: number;
         maxHeight: number;
     } | null;
@@ -136,13 +152,19 @@ function debounce<T extends (...args: Parameters<T>) => ReturnType<T>>(
 // Update the Meeting type in the meetingApi module
 declare module '@/services/meetingApi' {
     interface Meeting {
-        duration_minutes: number;
-        start_time: string;
         id: number;
         title: string;
         description?: string;
-        status: string;
-        notes: Record<string, { blocks: any[] }>;
+        type: 'daily' | 'planning' | 'review' | 'retrospective' | 'adhoc';
+        status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+        participants: TeamMember[];
+        notes: Record<string, MeetingNotes>;
+        settings?: {
+            goals: string[];
+            agenda: string[];
+        };
+        duration_minutes?: number;
+        start_time: string;
     }
 }
 
@@ -155,6 +177,8 @@ export function StandupNotes({
     onSave
 }: StandupNotesProps) {
     const [notes, setNotes] = useState<ParticipantNotes>({});
+    const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
     const [suggestions, setSuggestions] = useState<SuggestionState>({
         isOpen: false,
         type: null,
@@ -167,28 +191,31 @@ export function StandupNotes({
         noteType: 'todo',
         noteIndex: 0
     });
-    const [meetingDuration, setMeetingDuration] = useState<number>(0);
-    const [elapsedTime, setElapsedTime] = useState<number>(0);
+    const [deleteDialog, setDeleteDialog] = useState<{
+        isOpen: boolean;
+        participantId: number;
+        type: 'todo' | 'blocker' | 'done';
+        index: number;
+        content: string;
+    }>({
+        isOpen: false,
+        participantId: 0,
+        type: 'todo',
+        index: 0,
+        content: ''
+    });
     const { toast } = useToast();
 
     // Add a ref to track if notes are loaded
-    const notesLoadedRef = useRef(false);
-
-    // Timer effect
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setElapsedTime(prev => Math.min(prev + 1, meetingDuration * 60));
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [meetingDuration]);
+    const notesLoadedRef = useRef<boolean>(false);
+    // Add a ref for auto-save debounce
+    const autoSaveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
     // Load meeting details
     useEffect(() => {
         const loadMeeting = async () => {
             try {
-                const meeting = await meetingApi.getMeeting(teamId, meetingId);
-                setMeetingDuration(meeting.duration_minutes);
+                await meetingApi.getMeeting(teamId, meetingId);
             } catch (error) {
                 console.error('Failed to load meeting:', error);
             }
@@ -242,9 +269,14 @@ export function StandupNotes({
 
     // Add cleanup for notesLoadedRef when component unmounts
     useEffect(() => {
-        return () => {
+        const cleanup = () => {
             notesLoadedRef.current = false;
+            if (autoSaveTimeoutRef.current) {
+                clearTimeout(autoSaveTimeoutRef.current);
+            }
         };
+        cleanup(); // Call cleanup on mount to ensure clean state
+        return cleanup;
     }, []);
 
     const handleNoteChange = async (participantId: number, type: 'todo' | 'blocker' | 'done', index: number, content: string) => {
@@ -264,6 +296,67 @@ export function StandupNotes({
             }
             return { ...prev, [participantId]: participantNotes };
         });
+
+        // Trigger auto-save
+        if (autoSaveTimeoutRef.current) {
+            clearTimeout(autoSaveTimeoutRef.current);
+        }
+        autoSaveTimeoutRef.current = setTimeout(() => {
+            handleSave();
+        }, 1000); // Auto-save after 1 second of no changes
+    };
+
+    const handleDeleteNote = (participantId: number, type: 'todo' | 'blocker' | 'done', index: number) => {
+        const note = notes[participantId][type][index];
+        if (note.content.trim()) {
+            // If note has content, show confirmation dialog
+            setDeleteDialog({
+                isOpen: true,
+                participantId,
+                type,
+                index,
+                content: note.content
+            });
+        } else {
+            // If note is empty, delete immediately
+            deleteNote(participantId, type, index);
+        }
+    };
+
+    const deleteNote = (participantId: number, type: 'todo' | 'blocker' | 'done', index: number) => {
+        if (!canEditNotes(participantId, userRole, currentUserId)) {
+            toast({
+                title: "Permission Denied",
+                description: "You can only delete your own notes unless you're an admin or manager.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setNotes(prev => {
+            const participantNotes = { ...prev[participantId] };
+            participantNotes[type] = [
+                ...participantNotes[type].slice(0, index),
+                ...participantNotes[type].slice(index + 1)
+            ];
+            return { ...prev, [participantId]: participantNotes };
+        });
+
+        // Trigger auto-save after deletion
+        if (autoSaveTimeoutRef.current) {
+            clearTimeout(autoSaveTimeoutRef.current);
+        }
+        autoSaveTimeoutRef.current = setTimeout(() => {
+            handleSave();
+        }, 1000);
+    };
+
+    const handleBlur = (participantId: number, type: 'todo' | 'blocker' | 'done', index: number) => {
+        const note = notes[participantId][type][index];
+        if (!note.content.trim() && notes[participantId][type].length > 1) {
+            // Delete empty note on blur, but keep at least one note
+            deleteNote(participantId, type, index);
+        }
     };
 
     const handleKeyDown = (
@@ -409,44 +502,35 @@ export function StandupNotes({
 
     const handleSave = async () => {
         try {
-            await Promise.all(
-                Object.entries(notes).map(([participantId, participantNotes]) => {
-                    const blocks = Object.entries(participantNotes as Record<'todo' | 'blocker' | 'done', NoteRow[]>)
-                        .flatMap(([type, rows]) =>
-                            rows.map(row => ({
-                                id: row.id,
-                                type: type as 'todo' | 'blocker' | 'done',
-                                content: {
-                                    text: row.content,
-                                    task: row.taskId ? { id: row.taskId } : undefined
-                                },
-                                created_by: parseInt(participantId),
-                                created_at: new Date().toISOString()
-                            }))
-                        );
+            setIsSaving(true);
+            // Save notes for each participant separately
+            await Promise.all(Object.entries(notes).map(async ([participantId, participantNotes]) => {
+                const blocks = Object.entries(participantNotes as Record<'todo' | 'blocker' | 'done', NoteRow[]>).flatMap(([type, rows]) =>
+                    rows.map((note: NoteRow) => ({
+                        id: note.id,
+                        type: type as 'todo' | 'blocker' | 'done',
+                        content: {
+                            text: note.content,
+                            task: note.taskId ? { id: note.taskId } : undefined
+                        },
+                        created_by: parseInt(participantId),
+                        created_at: new Date().toISOString()
+                    }))
+                );
 
-                    return meetingApi.updateNotes(
-                        teamId,
-                        meetingId,
-                        parseInt(participantId),
-                        blocks
-                    );
-                })
-            );
-
-            toast({
-                title: "Success",
-                description: "Notes saved successfully"
-            });
-
+                await meetingApi.updateNotes(teamId, meetingId, parseInt(participantId), blocks);
+            }));
+            setLastSaveTime(new Date());
             onSave();
         } catch (error) {
             console.error('Failed to save notes:', error);
             toast({
                 title: "Error",
-                description: "Failed to save notes",
+                description: "Failed to save notes. Please try again.",
                 variant: "destructive"
             });
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -512,14 +596,7 @@ export function StandupNotes({
         if (value === '' && notes[participantId][type].length > 1) {
             const isLastNote = index === notes[participantId][type].length - 1;
             if (!isLastNote) {
-                setNotes(prev => {
-                    const updatedNotes = { ...prev };
-                    updatedNotes[participantId][type] = [
-                        ...updatedNotes[participantId][type].slice(0, index),
-                        ...updatedNotes[participantId][type].slice(index + 1)
-                    ];
-                    return updatedNotes;
-                });
+                deleteNote(participantId, type, index);
                 return;
             }
         }
@@ -539,15 +616,20 @@ export function StandupNotes({
             const spaceAbove = rect.top;
             const suggestionsHeight = 300; // max height of suggestions box
 
-            // Determine if suggestions should appear above or below
-            const showAbove = spaceBelow < suggestionsHeight && spaceAbove > spaceBelow;
+            // Position suggestions based on available space
+            const position = {
+                top: spaceBelow >= suggestionsHeight ? rect.bottom : null,
+                bottom: spaceBelow < suggestionsHeight ? windowHeight - rect.top : null,
+                left: rect.left,
+                maxHeight: Math.min(suggestionsHeight, Math.max(spaceBelow, spaceAbove))
+            };
 
             if (atMatch) {
                 setSuggestions({
                     isOpen: true,
                     type: 'user',
                     query: atMatch[1],
-                    position: null,
+                    position,
                     items: [],
                     selectedIndex: 0,
                     inputRef,
@@ -561,7 +643,7 @@ export function StandupNotes({
                     isOpen: true,
                     type: 'task',
                     query: hashMatch[1],
-                    position: null,
+                    position,
                     items: [],
                     selectedIndex: 0,
                     inputRef,
@@ -575,7 +657,7 @@ export function StandupNotes({
                     isOpen: true,
                     type: 'task_command',
                     query: '',
-                    position: null,
+                    position,
                     items: TASK_COMMANDS,
                     selectedIndex: 0,
                     inputRef,
@@ -590,21 +672,20 @@ export function StandupNotes({
     };
 
     const getProgressStats = () => {
-        let total = 0;
-        let completed = 0;
-        let blockers = 0;
+        const stats = {
+            total: 0,
+            completed: 0
+        };
 
         Object.values(notes).forEach(participantNotes => {
-            total += participantNotes.todo.length + participantNotes.done.length;
-            completed += participantNotes.done.length;
-            blockers += participantNotes.blocker.length;
+            stats.total += participantNotes.todo.length + participantNotes.blocker.length + participantNotes.done.length;
+            stats.completed += participantNotes.done.length;
         });
 
-        return { total, completed, blockers };
+        return stats;
     };
 
     const stats = getProgressStats();
-    const progress = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
 
     return (
         <div className="space-y-6 relative">
@@ -615,14 +696,18 @@ export function StandupNotes({
                             <CardTitle>Daily Standup</CardTitle>
                             <CardDescription>Track your team&apos;s progress and blockers</CardDescription>
                         </div>
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                                <Timer className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">
-                                    {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')} / {meetingDuration}:00
-                                </span>
-                            </div>
-                            <Progress value={progress} className="w-[100px]" />
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            {isSaving ? (
+                                <div className="flex items-center gap-1">
+                                    <Save className="h-4 w-4 animate-spin" />
+                                    Saving...
+                                </div>
+                            ) : lastSaveTime ? (
+                                <div className="flex items-center gap-1">
+                                    <Save className="h-4 w-4" />
+                                    Last saved {lastSaveTime.toLocaleTimeString()}
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                 </CardHeader>
@@ -636,12 +721,6 @@ export function StandupNotes({
                             <CheckCircle2 className="h-3 w-3" />
                             {stats.completed} Updates
                         </Badge>
-                        {stats.blockers > 0 && (
-                            <Badge variant="destructive" className="flex items-center gap-1">
-                                <AlertCircle className="h-3 w-3" />
-                                {stats.blockers} Blockers
-                            </Badge>
-                        )}
                     </div>
 
                     <Tabs defaultValue="all" className="w-full">
@@ -695,31 +774,49 @@ export function StandupNotes({
                                                                         className="h-6 px-2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                                                                         onClick={() => addRow(participant.id, type)}
                                                                     >
-                                                                        + Add note
+                                                                        + Add
                                                                     </Button>
                                                                 )}
                                                             </div>
                                                             <div className="space-y-2 pl-4" data-participant={participant.id} data-type={type}>
                                                                 {notes[participant.id]?.[type]?.map((note, index) => (
                                                                     <div key={note.id} className="flex flex-col gap-1">
-                                                                        <Input
-                                                                            value={note.content}
-                                                                            onChange={(e) => handleInputChange(
-                                                                                participant.id,
-                                                                                type,
-                                                                                index,
-                                                                                e.target.value,
-                                                                                e.target as HTMLInputElement
+                                                                        <ContextMenu>
+                                                                            <ContextMenuTrigger>
+                                                                                <Input
+                                                                                    value={note.content}
+                                                                                    onChange={(e) => handleInputChange(
+                                                                                        participant.id,
+                                                                                        type,
+                                                                                        index,
+                                                                                        e.target.value,
+                                                                                        e.target as HTMLInputElement
+                                                                                    )}
+                                                                                    onKeyDown={(e) => handleKeyDown(e, participant.id, type, index)}
+                                                                                    onBlur={() => handleBlur(participant.id, type, index)}
+                                                                                    placeholder={canEditNotes(participant.id, userRole, currentUserId) ? `Type your update...` : 'Read-only'}
+                                                                                    className={cn(
+                                                                                        "text-sm bg-transparent hover:border-input",
+                                                                                        !canEditNotes(participant.id, userRole, currentUserId) && "bg-muted cursor-not-allowed",
+                                                                                        type === 'blocker' && "border-l-2 border-l-destructive",
+                                                                                        type === 'todo' && "border-l-2 border-l-blue-500",
+                                                                                        type === 'done' && "border-l-2 border-l-green-500"
+                                                                                    )}
+                                                                                    disabled={!canEditNotes(participant.id, userRole, currentUserId)}
+                                                                                />
+                                                                            </ContextMenuTrigger>
+                                                                            {canEditNotes(participant.id, userRole, currentUserId) && (
+                                                                                <ContextMenuContent>
+                                                                                    <ContextMenuItem
+                                                                                        onClick={() => handleDeleteNote(participant.id, type, index)}
+                                                                                        className="text-destructive focus:text-destructive"
+                                                                                    >
+                                                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                                                        Delete Note
+                                                                                    </ContextMenuItem>
+                                                                                </ContextMenuContent>
                                                                             )}
-                                                                            onKeyDown={(e) => handleKeyDown(e, participant.id, type, index)}
-                                                                            placeholder={canEditNotes(participant.id, userRole, currentUserId) ? `Type your update...` : 'Read-only'}
-                                                                            className={cn(
-                                                                                "text-sm bg-transparent border-transparent hover:border-input focus:border-input transition-colors",
-                                                                                !canEditNotes(participant.id, userRole, currentUserId) && "bg-muted cursor-not-allowed",
-                                                                                type === 'blocker' && "border-l-2 border-l-destructive"
-                                                                            )}
-                                                                            disabled={!canEditNotes(participant.id, userRole, currentUserId)}
-                                                                        />
+                                                                        </ContextMenu>
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -738,23 +835,53 @@ export function StandupNotes({
                                 {participants.map((participant) => (
                                     notes[participant.id]?.blocker?.length > 0 && (
                                         <Card key={participant.id}>
-                                            <CardHeader className="py-3">
-                                                <div className="flex items-center gap-2">
+                                            <CardHeader>
+                                                <CardTitle className="flex items-center gap-2">
                                                     <Avatar className="h-6 w-6">
                                                         <AvatarImage src={`https://avatar.vercel.sh/${participant.email}`} />
-                                                        <AvatarFallback>
-                                                            {participant.full_name.split(' ').map(n => n[0]).join('')}
-                                                        </AvatarFallback>
+                                                        <AvatarFallback>{participant.full_name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                                                     </Avatar>
-                                                    <CardTitle className="text-sm">{participant.full_name}</CardTitle>
-                                                </div>
+                                                    {participant.full_name}
+                                                </CardTitle>
                                             </CardHeader>
                                             <CardContent>
                                                 <div className="space-y-2">
-                                                    {notes[participant.id].blocker.map((note) => (
-                                                        <div key={note.id} className="flex items-start gap-2">
-                                                            <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-1" />
-                                                            <p className="text-sm">{note.content}</p>
+                                                    {notes[participant.id]?.blocker?.map((note, index) => (
+                                                        <div key={note.id} className="flex flex-col gap-1">
+                                                            <ContextMenu>
+                                                                <ContextMenuTrigger>
+                                                                    <Input
+                                                                        value={note.content}
+                                                                        onChange={(e) => handleInputChange(
+                                                                            participant.id,
+                                                                            'blocker',
+                                                                            index,
+                                                                            e.target.value,
+                                                                            e.target as HTMLInputElement
+                                                                        )}
+                                                                        onKeyDown={(e) => handleKeyDown(e, participant.id, 'blocker', index)}
+                                                                        onBlur={() => handleBlur(participant.id, 'blocker', index)}
+                                                                        placeholder={canEditNotes(participant.id, userRole, currentUserId) ? `Type your update...` : 'Read-only'}
+                                                                        className={cn(
+                                                                            "text-sm bg-transparent hover:border-input transition-colors ring-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0",
+                                                                            !canEditNotes(participant.id, userRole, currentUserId) && "bg-muted cursor-not-allowed",
+                                                                            "border-l-2 border-l-destructive"
+                                                                        )}
+                                                                        disabled={!canEditNotes(participant.id, userRole, currentUserId)}
+                                                                    />
+                                                                </ContextMenuTrigger>
+                                                                {canEditNotes(participant.id, userRole, currentUserId) && (
+                                                                    <ContextMenuContent>
+                                                                        <ContextMenuItem
+                                                                            onClick={() => handleDeleteNote(participant.id, 'blocker', index)}
+                                                                            className="text-destructive focus:text-destructive"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4 mr-2" />
+                                                                            Delete Note
+                                                                        </ContextMenuItem>
+                                                                    </ContextMenuContent>
+                                                                )}
+                                                            </ContextMenu>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -780,9 +907,10 @@ export function StandupNotes({
                         <li>Type <kbd className="px-1 py-0.5 bg-muted rounded text-xs">/task</kbd> to create a task</li>
                         <li>Type <kbd className="px-1 py-0.5 bg-muted rounded text-xs">#</kbd> to reference a task</li>
                         <li>Type <kbd className="px-1 py-0.5 bg-muted rounded text-xs">@</kbd> to mention a team member</li>
+                        <li>Changes are automatically saved as you type</li>
+                        <li>Right-click on a note to delete it</li>
                     </ul>
                 </div>
-                <Button onClick={handleSave} size="lg">Save Notes</Button>
             </div>
 
             {/* Render suggestions with adjusted positioning */}
@@ -833,11 +961,11 @@ export function StandupNotes({
                                                         <div className="flex items-center gap-2 mt-0.5">
                                                             <span className={cn(
                                                                 "text-xs px-1.5 py-0.5 rounded-full",
-                                                                item.status === 'TODO' && "bg-yellow-100 text-yellow-700",
-                                                                item.status === 'IN_PROGRESS' && "bg-blue-100 text-blue-700",
-                                                                item.status === 'DONE' && "bg-green-100 text-green-700"
+                                                                item.status === TASK_STATUS.TODO && "bg-yellow-100 text-yellow-700",
+                                                                item.status === TASK_STATUS.IN_PROGRESS && "bg-blue-100 text-blue-700",
+                                                                item.status === TASK_STATUS.DONE && "bg-green-100 text-green-700"
                                                             )}>
-                                                                {(item.status || 'TODO').replace('_', ' ')}
+                                                                {TASK_STATUS_DISPLAY[item.status] || TASK_STATUS_DISPLAY[TASK_STATUS.TODO]}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -866,6 +994,38 @@ export function StandupNotes({
                     </Command>
                 </div>
             )}
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteDialog.isOpen} onOpenChange={(open) => !open && setDeleteDialog(prev => ({ ...prev, isOpen: false }))}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Note</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this note? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4 p-4 bg-muted rounded-lg">
+                        <p className="text-sm">{deleteDialog.content}</p>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteDialog(prev => ({ ...prev, isOpen: false }))}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => {
+                                deleteNote(deleteDialog.participantId, deleteDialog.type, deleteDialog.index);
+                                setDeleteDialog(prev => ({ ...prev, isOpen: false }));
+                            }}
+                        >
+                            Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
