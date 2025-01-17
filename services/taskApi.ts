@@ -58,7 +58,7 @@ export const taskApi = {
             ...data,
             status: data.status || TASK_STATUS.TODO
         };
-        const response = await api.post(`/teams/${teamId}/tasks/`, formattedData);
+        const response = await api.post(`/teams/${teamId}/tasks/create/`, formattedData);
         return response.data;
     },
 
