@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import api from '@/services/api';
 
 interface User {
     id: number;
@@ -21,23 +22,16 @@ export function useUser() {
                     return;
                 }
 
-                // Try to get cached user data
-                const cachedUser = sessionStorage.getItem('currentUser');
-                if (cachedUser) {
-                    setUser(JSON.parse(cachedUser));
-                    setIsLoading(false);
-                    return;
-                }
-
-                // If no cached data, get user data from session
+                // If session exists, get user data from our backend
                 if (session.user) {
+                    // Fetch user data from our backend which will map Supabase UID to internal ID
+                    const response = await api.get('/users/me/');
                     const userData: User = {
-                        id: parseInt(session.user.id),
-                        email: session.user.email || '',
-                        full_name: session.user.user_metadata.full_name || ''
+                        id: response.data.id,
+                        email: response.data.email,
+                        full_name: response.data.full_name
                     };
                     setUser(userData);
-                    sessionStorage.setItem('currentUser', JSON.stringify(userData));
                 }
             } catch (error) {
                 console.error('Failed to load user:', error);
@@ -52,7 +46,6 @@ export function useUser() {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
             if (event === 'SIGNED_OUT') {
                 setUser(null);
-                sessionStorage.removeItem('currentUser');
             } else if (event === 'SIGNED_IN') {
                 loadUser();
             }

@@ -6,40 +6,52 @@ import { Button } from "@/components/ui/button";
 import { Users, Target, ListTodo } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { meetingApi } from '@/services/meetingApi';
-import { MeetingNotes as MeetingNotesType } from '@/lib/types/meeting';
+import { MeetingType, MeetingStatus, MeetingNoteBlock } from '@/lib/types/meeting';
 import { MeetingParticipantsModal } from './MeetingParticipantsModal';
 import { TeamRole } from '@/lib/types/team';
 import { StandupNotes } from './StandupNotes';
 import { useUser } from '@/hooks/useUser';
+import { teamApi } from '@/services/teamApi';
 
 interface MeetingNotesProps {
     teamId: number;
     meetingId: number;
 }
 
-interface MeetingParticipant {
-    id: number;
-    email: string;
-    full_name: string;
-    role?: string;
+interface MeetingNotes {
+    blocks: MeetingNoteBlock[];
 }
 
-interface MeetingResponse {
+interface MeetingAPIResponse {
     id: number;
     title: string;
-    type: string;
-    status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
-    participants: MeetingParticipant[];
-    notes: Record<string, MeetingNotesType>;
+    description?: string;
+    type: MeetingType;
+    status: MeetingStatus;
+    duration_minutes: number;
+    start_time: string;
+    participants: {
+        id: number;
+        email: string;
+        full_name: string;
+    }[];
+    notes: Record<string, MeetingNotes>;
+    summary?: string;
     settings?: {
         goals: string[];
         agenda: string[];
     };
 }
 
-interface ExtendedMeeting extends MeetingResponse {
-    participants: MeetingParticipant[];
+interface ExtendedMeeting extends Omit<MeetingAPIResponse, 'participants'> {
+    participants: {
+        id: number;
+        email: string;
+        full_name: string;
+        role: TeamRole;
+    }[];
 }
+
 
 export function MeetingNotes({ teamId, meetingId }: MeetingNotesProps) {
     const [meeting, setMeeting] = useState<ExtendedMeeting | null>(null);
@@ -50,14 +62,19 @@ export function MeetingNotes({ teamId, meetingId }: MeetingNotesProps) {
 
     const fetchMeetingData = async () => {
         try {
-            const data = await meetingApi.getMeeting(teamId, meetingId);
+            const data = await meetingApi.getMeeting(teamId, meetingId) as MeetingAPIResponse;
+
+            // Get team member roles for each participant
+            const teamData = await teamApi.getTeam(teamId);
+            const memberRoles = new Map(teamData.members?.map(m => [m.user_id, m.role]));
+
             const transformedData: ExtendedMeeting = {
                 ...data,
                 participants: data.participants.map(p => ({
                     id: p.id,
                     email: p.email,
                     full_name: p.full_name,
-                    role: p.role
+                    role: memberRoles.get(p.id) || 'member' as TeamRole
                 }))
             };
             setMeeting(transformedData);
@@ -74,7 +91,7 @@ export function MeetingNotes({ teamId, meetingId }: MeetingNotesProps) {
     useEffect(() => {
         const loadData = async () => {
             if (!user) return;
-
+            console.log("USER", user);
             try {
                 // Get user's role in the team - this should be cached
                 const teamData = await meetingApi.getTeamRole(teamId);
@@ -101,7 +118,7 @@ export function MeetingNotes({ teamId, meetingId }: MeetingNotesProps) {
     if (!meeting || !currentUser || isUserLoading) return null;
 
     return (
-        <div className="space-y-6 max-w-5xl mx-auto">
+        <div className="space-y-6 max-w-10xl mx-auto">
             {/* Meeting Overview */}
             <Card>
                 <CardHeader>
@@ -182,14 +199,16 @@ export function MeetingNotes({ teamId, meetingId }: MeetingNotesProps) {
                     <CardDescription>Share your updates, blockers, and completed items</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <StandupNotes
-                        teamId={teamId}
-                        meetingId={meetingId}
-                        currentUserId={currentUser.id}
-                        userRole={currentUser.role}
-                        participants={meeting.participants}
-                        onSave={fetchMeetingData}
-                    />
+                    {currentUser && (
+                        <StandupNotes
+                            teamId={teamId}
+                            meetingId={meeting.id}
+                            currentUserId={currentUser.id}
+                            userRole={currentUser.role}
+                            participants={meeting.participants}
+                            onSave={fetchMeetingData}
+                        />
+                    )}
                 </CardContent>
             </Card>
 

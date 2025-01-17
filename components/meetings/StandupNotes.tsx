@@ -29,7 +29,7 @@ import {
     TabsTrigger,
 } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Hash, Users, CheckCircle2, Trash2, Save } from 'lucide-react';
+import { Hash, Users, CheckCircle2, Trash2, Save, Edit } from 'lucide-react';
 import { TASK_STATUS, TASK_STATUS_DISPLAY } from '@/lib/config/taskConfig';
 import {
     Dialog,
@@ -57,6 +57,7 @@ interface StandupNotesProps {
         id: number;
         email: string;
         full_name: string;
+        role?: TeamRole;
     }[];
     onSave: () => void;
 }
@@ -134,7 +135,12 @@ const TASK_COMMANDS: TaskCommandSuggestion[] = [
 
 // Helper function to check if a user can edit notes
 const canEditNotes = (participantId: number, userRole: TeamRole, currentUserId: number): boolean => {
-    return currentUserId === participantId || userRole === 'admin' || userRole === 'meeting_manager';
+    // Admin and meeting manager can edit all notes
+    if (userRole === 'admin' || userRole === 'meeting_manager') {
+        return true;
+    }
+    // Others can only edit their own notes
+    return currentUserId === participantId;
 };
 
 // Add debounce utility
@@ -167,6 +173,25 @@ declare module '@/services/meetingApi' {
         start_time: string;
     }
 }
+
+// Add role badge color mapping
+const getRoleBadgeStyles = (role: TeamRole) => {
+    switch (role) {
+        case 'admin':
+            return 'bg-blue-50 text-blue-700 border-blue-200';
+        case 'meeting_manager':
+            return 'bg-purple-50 text-purple-700 border-purple-200';
+        default:
+            return 'bg-gray-50 text-gray-700 border-gray-200';
+    }
+};
+
+// Add role display mapping
+const ROLE_DISPLAY = {
+    admin: 'Admin',
+    meeting_manager: 'Meeting Manager',
+    member: 'Member'
+} as const;
 
 export function StandupNotes({
     teamId,
@@ -353,9 +378,13 @@ export function StandupNotes({
 
     const handleBlur = (participantId: number, type: 'todo' | 'blocker' | 'done', index: number) => {
         const note = notes[participantId][type][index];
-        if (!note.content.trim() && notes[participantId][type].length > 1) {
-            // Delete empty note on blur, but keep at least one note
+        if (!note.content.trim()) {
+            // Delete empty note on blur, but ensure at least one empty note exists
             deleteNote(participantId, type, index);
+            if (notes[participantId][type].length === 0) {
+                // If we deleted the last note, add a new empty one
+                addRow(participantId, type);
+            }
         }
     };
 
@@ -740,21 +769,49 @@ export function StandupNotes({
                                 </thead>
                                 <tbody className="divide-y">
                                     {participants.map((participant) => (
-                                        <tr key={participant.id} className="group align-top">
+                                        <tr key={participant.id} className={cn(
+                                            "group align-top transition-colors",
+                                            canEditNotes(participant.id, userRole, currentUserId) && "bg-blue-50/5 hover:bg-blue-50/10"
+                                        )}>
                                             <td className="py-3 px-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Avatar className="h-6 w-6">
-                                                        <AvatarImage src={`https://avatar.vercel.sh/${participant.email}`} />
-                                                        <AvatarFallback>
-                                                            {participant.full_name.split(' ').map(n => n[0]).join('')}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-medium">
-                                                            {participant.full_name}
-                                                        </span>
-                                                        {!canEditNotes(participant.id, userRole, currentUserId) && (
-                                                            <span className="text-xs text-muted-foreground">Read-only</span>
+                                                <div className="flex flex-col gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <Avatar className="h-8 w-8">
+                                                            <AvatarImage src={`https://avatar.vercel.sh/${participant.email}`} />
+                                                            <AvatarFallback>
+                                                                {participant.full_name.split(' ').map(n => n[0]).join('')}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-sm font-medium truncate">
+                                                                {participant.full_name}
+                                                                {participant.id === currentUserId && (
+                                                                    <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
+                                                                        You
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                            <span className="text-xs text-muted-foreground truncate">
+                                                                {participant.email}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Role badges */}
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {participant.role && (
+                                                            <span className={cn(
+                                                                "text-xs px-2 py-1 rounded-full border",
+                                                                getRoleBadgeStyles(participant.role)
+                                                            )}>
+                                                                {ROLE_DISPLAY[participant.role]}
+                                                            </span>
+                                                        )}
+                                                        {canEditNotes(participant.id, userRole, currentUserId) && (
+                                                            <span className="text-xs px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 flex items-center gap-1">
+                                                                <Edit className="h-3 w-3" />
+                                                                {userRole === 'admin' ? 'Admin Access' : userRole === 'meeting_manager' ? 'Manager Access' : 'Can Edit'}
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -762,23 +819,41 @@ export function StandupNotes({
                                             <td className="py-3 px-4">
                                                 <div className="space-y-6">
                                                     {(['done', 'todo', 'blocker'] as const).map((type) => (
-                                                        <div key={type} className="space-y-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <Badge variant="outline" className="capitalize">
-                                                                    {type === 'done' ? 'Yesterday' : type === 'todo' ? 'Today' : 'Blockers'}
-                                                                </Badge>
+                                                        <div key={type} className={cn(
+                                                            "space-y-2 rounded-lg",
+                                                            canEditNotes(participant.id, userRole, currentUserId) && "p-3 hover:bg-muted/5 transition-colors"
+                                                        )}>
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Badge variant="outline" className={cn(
+                                                                        "capitalize font-medium",
+                                                                        type === 'done' && "border-green-200 bg-green-50 text-green-700 hover:bg-green-50 hover:text-green-700",
+                                                                        type === 'todo' && "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50 hover:text-blue-700",
+                                                                        type === 'blocker' && "border-red-200 bg-red-50 text-red-700 hover:bg-red-50 hover:text-red-700"
+                                                                    )}>
+                                                                        {type === 'done' ? 'Yesterday' : type === 'todo' ? 'Today' : 'Blockers'}
+                                                                    </Badge>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {notes[participant.id]?.[type]?.length || 0} items
+                                                                    </span>
+                                                                </div>
                                                                 {canEditNotes(participant.id, userRole, currentUserId) && (
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="sm"
-                                                                        className="h-6 px-2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        className={cn(
+                                                                            "h-6 px-2 text-xs",
+                                                                            type === 'done' && "text-green-700 hover:text-green-800 hover:bg-green-50",
+                                                                            type === 'todo' && "text-blue-700 hover:text-blue-800 hover:bg-blue-50",
+                                                                            type === 'blocker' && "text-red-700 hover:text-red-800 hover:bg-red-50"
+                                                                        )}
                                                                         onClick={() => addRow(participant.id, type)}
                                                                     >
-                                                                        + Add
+                                                                        + Add Note
                                                                     </Button>
                                                                 )}
                                                             </div>
-                                                            <div className="space-y-2 pl-4" data-participant={participant.id} data-type={type}>
+                                                            <div className="space-y-2" data-participant={participant.id} data-type={type}>
                                                                 {notes[participant.id]?.[type]?.map((note, index) => (
                                                                     <div key={note.id} className="flex flex-col gap-1">
                                                                         <ContextMenu>
@@ -794,15 +869,20 @@ export function StandupNotes({
                                                                                     )}
                                                                                     onKeyDown={(e) => handleKeyDown(e, participant.id, type, index)}
                                                                                     onBlur={() => handleBlur(participant.id, type, index)}
-                                                                                    placeholder={canEditNotes(participant.id, userRole, currentUserId) ? `Type your update...` : 'Read-only'}
+                                                                                    placeholder={canEditNotes(participant.id, userRole, currentUserId)
+                                                                                        ? `Type your ${type === 'done' ? 'completed tasks' : type === 'todo' ? 'planned tasks' : 'blockers'}...`
+                                                                                        : 'Read-only'}
                                                                                     className={cn(
-                                                                                        "text-sm bg-transparent hover:border-input",
-                                                                                        !canEditNotes(participant.id, userRole, currentUserId) && "bg-muted cursor-not-allowed",
-                                                                                        type === 'blocker' && "border-l-2 border-l-destructive",
+                                                                                        "text-sm bg-transparent transition-colors",
+                                                                                        "hover:border-input focus:border-input",
+                                                                                        "ring-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0",
+                                                                                        // !canEditNotes(participant.id, userRole, currentUserId) && "bg-muted cursor-not-allowed",
+                                                                                        type === 'blocker' && "border-l-2 border-l-red-500",
                                                                                         type === 'todo' && "border-l-2 border-l-blue-500",
-                                                                                        type === 'done' && "border-l-2 border-l-green-500"
+                                                                                        type === 'done' && "border-l-2 border-l-green-500",
+                                                                                        note.content === '' && "border-dashed"
                                                                                     )}
-                                                                                    disabled={!canEditNotes(participant.id, userRole, currentUserId)}
+                                                                                // disabled={!canEditNotes(participant.id, userRole, currentUserId)}
                                                                                 />
                                                                             </ContextMenuTrigger>
                                                                             {canEditNotes(participant.id, userRole, currentUserId) && (
@@ -819,6 +899,11 @@ export function StandupNotes({
                                                                         </ContextMenu>
                                                                     </div>
                                                                 ))}
+                                                                {notes[participant.id]?.[type]?.length === 0 && (
+                                                                    <div className="text-sm text-muted-foreground italic px-3 py-2">
+                                                                        No {type === 'done' ? 'completed tasks' : type === 'todo' ? 'planned tasks' : 'blockers'} yet
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     ))}
@@ -864,10 +949,10 @@ export function StandupNotes({
                                                                         placeholder={canEditNotes(participant.id, userRole, currentUserId) ? `Type your update...` : 'Read-only'}
                                                                         className={cn(
                                                                             "text-sm bg-transparent hover:border-input transition-colors ring-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0",
-                                                                            !canEditNotes(participant.id, userRole, currentUserId) && "bg-muted cursor-not-allowed",
+                                                                            // !canEditNotes(participant.id, userRole, currentUserId) && "bg-muted cursor-not-allowed",
                                                                             "border-l-2 border-l-destructive"
                                                                         )}
-                                                                        disabled={!canEditNotes(participant.id, userRole, currentUserId)}
+                                                                    // disabled={!canEditNotes(participant.id, userRole, currentUserId)}
                                                                     />
                                                                 </ContextMenuTrigger>
                                                                 {canEditNotes(participant.id, userRole, currentUserId) && (

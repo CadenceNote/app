@@ -1,15 +1,22 @@
 import api from './api';
-import { TeamMember, TeamRole } from '@/lib/types/team';
-import { TaskSuggestion, UserMention, MeetingNotes, MeetingNoteBlock } from '@/lib/types/meeting';
+import { TeamRole } from '@/lib/types/team';
+import { MeetingType, MeetingStatus, MeetingNotes, MeetingNoteBlock, TaskSuggestion } from '@/lib/types/meeting';
 
 interface Meeting {
     id: number;
     title: string;
-    date: string;
-    type: 'daily' | 'planning' | 'review' | 'retrospective' | 'adhoc';
-    status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
-    participants: TeamMember[];
+    description?: string;
+    type: MeetingType;
+    status: MeetingStatus;
+    duration_minutes: number;
+    start_time: string;
+    participants: {
+        id: number;
+        email: string;
+        full_name: string;
+    }[];
     notes: Record<string, MeetingNotes>;
+    summary?: string;
     settings?: {
         goals: string[];
         agenda: string[];
@@ -109,20 +116,7 @@ export const meetingApi = {
 
     // Get user's role in a team
     getTeamRole: async (teamId: number): Promise<{ role: TeamRole }> => {
-        // Try to get cached role
-        const cacheKey = `team_${teamId}_role`;
-        const cachedRole = sessionStorage.getItem(cacheKey);
-        if (cachedRole) {
-            return { role: cachedRole as TeamRole };
-        }
-
-        // If no cached data, fetch from API
         const response = await api.get(`/teams/${teamId}/members/me/role/`);
-        const role = response.data.role;
-
-        // Cache the role
-        sessionStorage.setItem(cacheKey, role);
-
-        return { role };
+        return { role: response.data.role };
     }
 }; 
