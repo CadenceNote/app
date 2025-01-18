@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,12 +10,10 @@ import { Plus, Calendar, ListTodo, Users } from 'lucide-react';
 import { MeetingList } from '@/components/meetings/MeetingList';
 import { TaskList } from '@/components/tasks/TaskList';
 import { CreateMeetingModal } from '@/components/meetings/CreateMeetingModal';
+import { TaskDetail } from '@/components/tasks/TaskDetail';
 import { meetingApi } from '@/services/meetingApi';
 import { taskApi } from '@/services/taskApi';
 import { teamApi } from '@/services/teamApi';
-import { Meeting } from '@/lib/types/meeting';
-import { Task } from '@/lib/types/task';
-import { TeamMember } from '@/lib/types/team';
 
 interface DashboardStats {
     meetings: {
@@ -34,9 +32,9 @@ interface DashboardStats {
 
 export default function TeamDashboardPage() {
     const params = useParams();
-    const router = useRouter();
     const teamId = parseInt(params.teamId as string);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
     const [stats, setStats] = useState<DashboardStats>({
         meetings: { upcoming: 0, thisWeek: 0 },
         tasks: { active: 0, dueThisWeek: 0 },
@@ -49,7 +47,7 @@ export default function TeamDashboardPage() {
                 // Get all meetings and filter upcoming ones
                 const meetings = await meetingApi.listMeetings(teamId);
                 const now = new Date();
-                const upcomingMeetings = meetings.filter(m => new Date(m.startTime) > now);
+                const upcomingMeetings = meetings.filter(m => new Date(m.start_time) > now);
 
                 // Get all tasks
                 const tasks = await taskApi.listTasks(teamId);
@@ -64,19 +62,19 @@ export default function TeamDashboardPage() {
                 setStats({
                     meetings: {
                         upcoming: upcomingMeetings.length,
-                        thisWeek: upcomingMeetings.filter(m => new Date(m.startTime) <= weekEnd).length
+                        thisWeek: upcomingMeetings.filter(m => new Date(m.start_time) <= weekEnd).length
                     },
                     tasks: {
-                        active: tasks.filter(t => t.status !== 'COMPLETED').length,
+                        active: tasks.filter(t => t.status !== 'DONE').length,
                         dueThisWeek: tasks.filter(t =>
-                            t.status !== 'COMPLETED' &&
+                            t.status !== 'DONE' &&
                             t.dueDate &&
                             new Date(t.dueDate) <= weekEnd
                         ).length
                     },
                     team: {
                         total: members.length,
-                        online: members.filter(m => m.presence === 'online').length
+                        online: members.filter(m => m.status === 'online').length
                     }
                 });
             } catch (error) {
@@ -97,7 +95,7 @@ export default function TeamDashboardPage() {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    <Button onClick={() => router.push(`/dashboard/${teamId}/tasks/new`)}>
+                    <Button onClick={() => setIsCreateTaskModalOpen(true)}>
                         <Plus className="h-4 w-4 mr-2" />
                         New Task
                     </Button>
@@ -181,6 +179,12 @@ export default function TeamDashboardPage() {
             <CreateMeetingModal
                 open={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
+                teamId={teamId}
+            />
+
+            <TaskDetail
+                isOpen={isCreateTaskModalOpen}
+                onClose={() => setIsCreateTaskModalOpen(false)}
                 teamId={teamId}
             />
         </div>

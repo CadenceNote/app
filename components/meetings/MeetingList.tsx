@@ -19,11 +19,10 @@ interface MeetingListProps {
 }
 
 const MEETING_TYPE_LABELS: Record<MeetingType, string> = {
-    [MeetingType.DAILY]: 'Daily Standup',
+    [MeetingType.STANDUP]: 'Daily Standup',
     [MeetingType.PLANNING]: 'Sprint Planning',
-    [MeetingType.REVIEW]: 'Sprint Review',
     [MeetingType.RETRO]: 'Sprint Retrospective',
-    [MeetingType.ADHOC]: 'Ad Hoc Meeting'
+    [MeetingType.OTHER]: 'Other Meeting'
 };
 
 export function MeetingList({ teamId }: MeetingListProps) {

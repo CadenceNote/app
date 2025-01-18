@@ -1,9 +1,10 @@
+// Remember to update the backend types when changing these
+// backend at backend/src/models/meeting.py (changing might need migration)
 export enum MeetingType {
-    DAILY = 'daily',
-    PLANNING = 'planning',
-    REVIEW = 'review',
-    RETRO = 'retrospective',
-    ADHOC = 'adhoc'
+    STANDUP = 'STANDUP',
+    PLANNING = 'PLANNING',
+    RETRO = 'RETROSPECTIVE',
+    OTHER = 'OTHER'
 }
 
 export enum MeetingStatus {
