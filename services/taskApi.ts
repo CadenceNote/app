@@ -1,19 +1,22 @@
 import api from './api';
-import { Task, TaskPriority, TaskStatus, TaskType } from '@/lib/types/task';
-import { TASK_STATUS } from '@/lib/config/taskConfig';
+import { Task, TaskStatus, TaskPriority, TaskType, Comment } from '@/lib/types/task';
 
 export interface CreateTaskInput {
     title: string;
-    description?: string;
-    assignee_id?: number;
-    priority?: TaskPriority;
-    type?: TaskType;
-    status?: TaskStatus;
+    description: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    type: TaskType;
     start_date?: string;
     due_date?: string;
-    created_by_id?: number;
-    source_meeting_id?: number;
-    team_ref_number?: number;
+    assignee_id?: number;
+    labels?: string[];
+    category?: string;
+    team?: string;
+    time_tracking?: {
+        logged: string;
+        remaining: string;
+    };
 }
 
 export interface TaskFilters {
@@ -52,18 +55,24 @@ export const taskApi = {
         return response.data.tasks;
     },
 
+    // Get a single task
+    getTask: async (teamId: number, taskId: number): Promise<Task> => {
+        const response = await api.get(`/teams/${teamId}/tasks/${taskId}/`);
+        return response.data;
+    },
+
     // Create a new task
     createTask: async (teamId: number, data: CreateTaskInput): Promise<Task> => {
         const formattedData = {
             ...data,
-            status: data.status || TASK_STATUS.TODO
+            status: data.status || TaskStatus.TODO
         };
         const response = await api.post(`/teams/${teamId}/tasks/create/`, formattedData);
         return response.data;
     },
 
     // Update a task
-    updateTask: async (teamId: number, taskId: number, data: Partial<Task>): Promise<Task> => {
+    updateTask: async (teamId: number, taskId: number, data: Partial<CreateTaskInput>): Promise<Task> => {
         const response = await api.put(`/teams/${teamId}/tasks/${taskId}/`, data);
         return response.data;
     },
@@ -79,5 +88,17 @@ export const taskApi = {
             new_index: newIndex
         });
         return response.data;
+    },
+
+    // Add a comment to a task
+    addComment: async (teamId: number, taskId: number, data: { content: string, parent_id?: number }): Promise<Comment> => {
+        const response = await api.post(`/teams/${teamId}/tasks/${taskId}/comments/`, data);
+        return response.data;
+    },
+
+    // Get task comments
+    getComments: async (teamId: number, taskId: number): Promise<Comment[]> => {
+        const response = await api.get(`/teams/${teamId}/tasks/${taskId}/comments/`);
+        return response.data.comments;
     }
 }; 
