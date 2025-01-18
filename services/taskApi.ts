@@ -83,7 +83,9 @@ export const taskApi = {
 
     // Delete a task
     deleteTask: async (teamId: number, taskId: number): Promise<void> => {
-        await api.delete(`/teams/${teamId}/tasks/${taskId}/`);
+        await api.delete(`/teams/${teamId}/tasks/${taskId}/`, {
+            data: { user_id: 1 } // TODO: Get actual user ID from auth context
+        });
     },
 
     // Update task order

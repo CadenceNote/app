@@ -25,11 +25,9 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { Task, TaskStatus, TaskPriority, TaskType, TimeUnit } from '@/lib/types/task';
+import { Task, TaskStatus, TaskPriority, TaskType } from '@/lib/types/task';
 import { taskApi, CreateTaskInput } from '@/services/taskApi';
 import { useToast } from '@/hooks/use-toast';
-import { TimeTracking } from './TimeTracking'
-import { useTimeTracking } from '@/hooks/useTimeTracking'
 
 interface TaskDetailProps {
     isOpen: boolean
@@ -59,12 +57,6 @@ const DetailField: React.FC<DetailFieldProps> = ({ label, value, onClick, classN
 );
 
 export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: TaskDetailProps) {
-    const { timeTracking, isTimerRunning, startTimer, stopTimer, logTime, updateEstimate } = useTimeTracking({
-        teamId,
-        taskId: task?.id || 0,
-        initialTimeTracking: task?.time_tracking
-    })
-
     const defaultFormData: Partial<CreateTaskInput> = {
         title: task?.title || '',
         description: task?.description || '',
@@ -74,13 +66,9 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
         start_date: task?.start_date || undefined,
         due_date: task?.due_date || undefined,
         assignee_id: task?.assignee?.id || undefined,
-        labels: task?.labels.map(l => l.id.toString()) || [],
+        labels: task?.labels.map(l => l.id) || [],
         category: task?.category || undefined,
-        team: task?.team?.name || undefined,
-        time_tracking: {
-            logged: task?.time_tracking.time_spent?.toString() || '0',
-            remaining: task?.time_tracking.remaining_estimate?.toString() || '0'
-        }
+        team: task?.team || undefined
     }
 
     const [formData, setFormData] = useState<Partial<CreateTaskInput>>(defaultFormData)
@@ -101,7 +89,7 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                     start_date: formData.start_date,
                     due_date: formData.due_date,
                     assignee_id: formData.assignee_id,
-                    labels: formData.labels,
+                    labels: formData.labels?.map(l => Number(l)) || [],
                     category: formData.category
                 };
 
@@ -125,15 +113,7 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                     assignee_id: formData.assignee_id,
                     labels: formData.labels?.map(l => Number(l)) || [],
                     category: formData.category,
-                    team: formData.team ? {
-                        id: Number(formData.team),
-                        name: ''  // This will be filled by the backend
-                    } : undefined,
-                    time_tracking: {
-                        original_estimate: 0,
-                        remaining_estimate: 0,
-                        unit: TimeUnit.HOURS
-                    }
+                    team: formData.team
                 };
                 await taskApi.createTask(teamId, requiredFields);
                 toast({
@@ -152,16 +132,6 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
         }
     };
 
-    const handleTimeTrackingChange = (field: 'logged' | 'remaining', value: string) => {
-        setFormData(prev => ({
-            ...prev,
-            time_tracking: {
-                logged: field === 'logged' ? value : prev.time_tracking?.logged || '0',
-                remaining: field === 'remaining' ? value : prev.time_tracking?.remaining || '0'
-            }
-        }))
-    }
-
     const handleDateChange = (field: 'start_date' | 'due_date', date: Date | undefined) => {
         setFormData(prev => ({
             ...prev,
@@ -172,7 +142,10 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
     const handleLabelsChange = (value: string) => {
         setFormData(prev => ({
             ...prev,
-            labels: value.split(',').map(l => l.trim()).filter(Boolean)
+            labels: value.split(',')
+                .map(l => l.trim())
+                .filter(Boolean)
+                .map(l => Number(l))
         }))
     }
 
@@ -235,39 +208,7 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
 
                             {/* Activity Section */}
                             <div className="space-y-6">
-                                <h2 className="text-lg font-semibold">Activity</h2>
-
-                                {/* Time Tracking */}
-                                <div className="space-y-4">
-                                    <h3 className="text-sm font-medium">Time Tracking</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-sm font-medium">Logged Time</label>
-                                            <Input
-                                                value={formData.time_tracking?.logged || '0'}
-                                                onChange={(e) => handleTimeTrackingChange('logged', e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-sm font-medium">Remaining Time</label>
-                                            <Input
-                                                value={formData.time_tracking?.remaining || '0'}
-                                                onChange={(e) => handleTimeTrackingChange('remaining', e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-                                    {task && (
-                                        <TimeTracking
-                                            taskId={task.id}
-                                            timeTracking={timeTracking}
-                                            onLogTime={logTime}
-                                            onUpdateEstimate={updateEstimate}
-                                            onStartTimer={startTimer}
-                                            onStopTimer={stopTimer}
-                                            isTimerRunning={isTimerRunning}
-                                        />
-                                    )}
-                                </div>
+                                {task && <h2 className="text-lg font-semibold">Activity</h2>}
 
                                 {/* Comments Section */}
                                 {task && (

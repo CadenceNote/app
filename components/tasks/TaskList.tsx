@@ -15,7 +15,8 @@ import { Button } from "@/components/ui/button";
 import {
     Search,
     ChevronDown,
-    Plus
+    Plus,
+    AlertTriangle
 } from 'lucide-react';
 import {
     Select,
@@ -30,13 +31,21 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Task, TaskStatus, TaskPriority } from '@/lib/types/task';
 import { TaskDetail } from './TaskDetail';
 import { taskApi } from '@/services/taskApi';
 import { useToast } from '@/hooks/use-toast';
 import { TASK_STATUS_DISPLAY } from '@/lib/config/taskConfig';
-
-
 
 interface TaskListProps {
     teamId: number;
@@ -53,6 +62,7 @@ export function TaskList({ teamId }: TaskListProps) {
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
     const { toast } = useToast();
 
     // Fetch tasks
@@ -100,9 +110,35 @@ export function TaskList({ teamId }: TaskListProps) {
         );
     };
 
-    const handleTaskDelete = async (taskId: number) => {
+    const handleStatusUpdate = async (task: Task, newStatus: TaskStatus) => {
         try {
-            await taskApi.deleteTask(teamId, taskId);
+            const updatedTask = await taskApi.updateTask(teamId, task.id, {
+                status: newStatus
+            });
+            handleTaskUpdate(updatedTask);
+            toast({
+                title: "Success",
+                description: `Task marked as ${TASK_STATUS_DISPLAY[newStatus]}`,
+            });
+        } catch (error) {
+            console.error('Failed to update task status:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update task status. Please try again.",
+                variant: "destructive"
+            });
+        }
+    };
+
+    const handleTaskDelete = async (task: Task) => {
+        setTaskToDelete(task);
+    };
+
+    const confirmDelete = async () => {
+        if (!taskToDelete) return;
+
+        try {
+            await taskApi.deleteTask(teamId, taskToDelete.id);
             fetchTasks(); // Refresh the list
             toast({
                 title: "Success",
@@ -115,6 +151,8 @@ export function TaskList({ teamId }: TaskListProps) {
                 description: "Failed to delete task. Please try again.",
                 variant: "destructive"
             });
+        } finally {
+            setTaskToDelete(null);
         }
     };
 
@@ -242,13 +280,24 @@ export function TaskList({ teamId }: TaskListProps) {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task)}>
-                                                Start Progress
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task)}>
-                                                Mark as Done
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleTaskDelete(task.id)} className="text-red-600">
+                                            {task.status !== TaskStatus.IN_PROGRESS && (
+                                                <DropdownMenuItem
+                                                    onClick={() => handleStatusUpdate(task, TaskStatus.IN_PROGRESS)}
+                                                >
+                                                    Start Progress
+                                                </DropdownMenuItem>
+                                            )}
+                                            {task.status !== TaskStatus.DONE && (
+                                                <DropdownMenuItem
+                                                    onClick={() => handleStatusUpdate(task, TaskStatus.DONE)}
+                                                >
+                                                    Mark as Done
+                                                </DropdownMenuItem>
+                                            )}
+                                            <DropdownMenuItem
+                                                onClick={() => handleTaskDelete(task)}
+                                                className="text-red-600"
+                                            >
                                                 Delete
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
@@ -283,6 +332,26 @@ export function TaskList({ teamId }: TaskListProps) {
                 teamId={teamId}
                 task={undefined}
             />
+
+            <AlertDialog open={!!taskToDelete} onOpenChange={() => setTaskToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-red-500" />
+                            Delete Task
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete task "{taskToDelete?.title}"? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete} className="bg-red-500 hover:bg-red-600">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

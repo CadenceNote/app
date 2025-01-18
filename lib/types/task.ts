@@ -128,9 +128,4 @@ export interface CreateTaskInput {
         id: number
         name: string
     } | null
-    time_tracking: {
-        original_estimate: number
-        remaining_estimate: number
-        unit: TimeUnit
-    }
 }
