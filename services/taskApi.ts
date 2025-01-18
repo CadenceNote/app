@@ -1,5 +1,5 @@
 import api from './api';
-import { Task, TaskStatus, TaskPriority, TaskType, Comment } from '@/lib/types/task';
+import { Task, TaskStatus, TaskPriority, TaskType, TimeUnit, Comment } from '@/lib/types/task';
 
 export interface CreateTaskInput {
     title: string;
@@ -10,12 +10,16 @@ export interface CreateTaskInput {
     start_date?: string;
     due_date?: string;
     assignee_id?: number;
-    labels?: string[];
+    labels: number[];
     category?: string;
-    team?: string;
-    time_tracking?: {
-        logged: string;
-        remaining: string;
+    team?: {
+        id: number;
+        name: string;
+    };
+    time_tracking: {
+        original_estimate: number;
+        remaining_estimate: number;
+        unit: TimeUnit;
     };
 }
 
@@ -92,7 +96,7 @@ export const taskApi = {
 
     // Add a comment to a task
     addComment: async (teamId: number, taskId: number, data: { content: string, parent_id?: number }): Promise<Comment> => {
-        const response = await api.post(`/teams/${teamId}/tasks/${taskId}/comments/`, data);
+        const response = await api.post(`/teams/${teamId}/tasks/${taskId}/comments/add/`, data);
         return response.data;
     },
 

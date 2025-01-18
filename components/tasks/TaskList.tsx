@@ -30,11 +30,11 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Task, TaskStatus } from '@/lib/types/task';
+import { Task, TaskStatus, TaskPriority } from '@/lib/types/task';
 import { TaskDetail } from './TaskDetail';
 import { taskApi } from '@/services/taskApi';
 import { useToast } from '@/hooks/use-toast';
-import { TASK_STATUS, TASK_STATUS_DISPLAY, getStatusDisplay } from '@/lib/config/taskConfig';
+import { TASK_STATUS_DISPLAY } from '@/lib/config/taskConfig';
 
 
 
@@ -90,22 +90,14 @@ export function TaskList({ teamId }: TaskListProps) {
         setIsCreateOpen(true);
     };
 
-    const handleTaskUpdate = async (taskId: number, data: Partial<Task>) => {
-        try {
-            await taskApi.updateTask(teamId, taskId, data);
-            fetchTasks(); // Refresh the list
-            toast({
-                title: "Success",
-                description: "Task updated successfully",
-            });
-        } catch (error) {
-            console.error('Failed to update task:', error);
-            toast({
-                title: "Error",
-                description: "Failed to update task. Please try again.",
-                variant: "destructive"
-            });
-        }
+    const handleTaskUpdate = (updatedTask: Task) => {
+        setSelectedTask(updatedTask);
+        // Also update the task in the list
+        setTasks(prevTasks =>
+            prevTasks.map(task =>
+                task.id === updatedTask.id ? updatedTask : task
+            )
+        );
     };
 
     const handleTaskDelete = async (taskId: number) => {
@@ -126,23 +118,24 @@ export function TaskList({ teamId }: TaskListProps) {
         }
     };
 
-    const getStatusColor = (status: Task['status']) => {
+    const getStatusColor = (status: TaskStatus) => {
         const colors = {
-            [TASK_STATUS.TODO]: 'bg-gray-100 text-gray-800',
-            [TASK_STATUS.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
-            [TASK_STATUS.DONE]: 'bg-green-100 text-green-800',
-            [TASK_STATUS.BLOCKED]: 'bg-red-100 text-red-800'
+            [TaskStatus.TODO]: 'bg-gray-100 text-gray-800',
+            [TaskStatus.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
+            [TaskStatus.DONE]: 'bg-green-100 text-green-800',
+            [TaskStatus.BLOCKED]: 'bg-red-100 text-red-800'
         };
-        return colors[status] || colors[TASK_STATUS.TODO];
+        return colors[status] || colors[TaskStatus.TODO];
     };
 
-    const getPriorityColor = (priority: Task['priority']) => {
+    const getPriorityColor = (priority: TaskPriority) => {
         const colors = {
-            'Low': 'bg-gray-100 text-gray-800',
-            'Medium': 'bg-yellow-100 text-yellow-800',
-            'High': 'bg-red-100 text-red-800'
+            [TaskPriority.LOW]: 'bg-gray-100 text-gray-800',
+            [TaskPriority.MEDIUM]: 'bg-yellow-100 text-yellow-800',
+            [TaskPriority.HIGH]: 'bg-red-100 text-red-800',
+            [TaskPriority.URGENT]: 'bg-orange-100 text-orange-800'
         };
-        return colors[priority] || colors['Low'];
+        return colors[priority] || colors[TaskPriority.LOW];
     };
 
     const handleRowClick = (task: Task) => {
@@ -173,9 +166,9 @@ export function TaskList({ teamId }: TaskListProps) {
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>
-                        {Object.entries(TASK_STATUS).map(([key, value]) => (
-                            <SelectItem key={value} value={value}>
-                                {TASK_STATUS_DISPLAY[value]}
+                        {Object.values(TaskStatus).map((status) => (
+                            <SelectItem key={status} value={status}>
+                                {TASK_STATUS_DISPLAY[status] || status}
                             </SelectItem>
                         ))}
                     </SelectContent>
@@ -221,10 +214,12 @@ export function TaskList({ teamId }: TaskListProps) {
                             >
                                 <TableCell className="font-medium">T-{task.team_ref_number}</TableCell>
                                 <TableCell>{task.title}</TableCell>
-                                <TableCell>{task.assignee}</TableCell>
+                                <TableCell>
+                                    {task.assignee ? task.assignee.full_name : 'Unassigned'}
+                                </TableCell>
                                 <TableCell>
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                                        {TASK_STATUS_DISPLAY[task.status]}
+                                        {task.status}
                                     </span>
                                 </TableCell>
                                 <TableCell>{task.type}</TableCell>
@@ -235,8 +230,8 @@ export function TaskList({ teamId }: TaskListProps) {
                                 </TableCell>
                                 <TableCell>
                                     <div className="text-sm">
-                                        <div>Start: {task.startDate ? task.startDate.toISOString().split('T')[0] : 'Not set'}</div>
-                                        <div>End: {task.dueDate ? task.dueDate.toISOString().split('T')[0] : 'Not set'}</div>
+                                        <div>Start: {task.start_date ? task.start_date : 'Not set'}</div>
+                                        <div>End: {task.due_date ? task.due_date : 'Not set'}</div>
                                     </div>
                                 </TableCell>
                                 <TableCell onClick={(e) => e.stopPropagation()}>
@@ -247,10 +242,10 @@ export function TaskList({ teamId }: TaskListProps) {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task.id, { status: TASK_STATUS.IN_PROGRESS })}>
+                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task)}>
                                                 Start Progress
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task.id, { status: TASK_STATUS.DONE })}>
+                                            <DropdownMenuItem onClick={() => handleTaskUpdate(task)}>
                                                 Mark as Done
                                             </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => handleTaskDelete(task.id)} className="text-red-600">
@@ -275,6 +270,7 @@ export function TaskList({ teamId }: TaskListProps) {
                     }}
                     task={selectedTask}
                     teamId={teamId}
+                    onTaskUpdate={handleTaskUpdate}
                 />
             )}
 
@@ -285,6 +281,7 @@ export function TaskList({ teamId }: TaskListProps) {
                     fetchTasks(); // Refresh after closing create view
                 }}
                 teamId={teamId}
+                task={undefined}
             />
         </div>
     );

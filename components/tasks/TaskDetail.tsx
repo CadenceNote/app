@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { Task, TaskStatus, TaskPriority, TaskType } from '@/lib/types/task';
+import { Task, TaskStatus, TaskPriority, TaskType, TimeUnit } from '@/lib/types/task';
 import { taskApi, CreateTaskInput } from '@/services/taskApi';
 import { useToast } from '@/hooks/use-toast';
 import { TimeTracking } from './TimeTracking'
@@ -91,11 +91,28 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
     const handleSubmit = async () => {
         try {
             if (task) {
-                await taskApi.updateTask(teamId, task.id, formData)
+                // Format the data for update
+                const updateData = {
+                    title: formData.title,
+                    description: formData.description,
+                    status: formData.status,
+                    priority: formData.priority,
+                    type: formData.type,
+                    start_date: formData.start_date,
+                    due_date: formData.due_date,
+                    assignee_id: formData.assignee_id,
+                    labels: formData.labels,
+                    category: formData.category
+                };
+
+                const updatedTask = await taskApi.updateTask(teamId, task.id, updateData);
+                if (onTaskUpdate) {
+                    onTaskUpdate(updatedTask);
+                }
                 toast({
                     title: "Task updated",
                     description: "Your changes have been saved successfully."
-                })
+                });
             } else {
                 const requiredFields: CreateTaskInput = {
                     title: formData.title || '',
@@ -103,33 +120,37 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                     status: formData.status || TaskStatus.TODO,
                     priority: formData.priority || TaskPriority.MEDIUM,
                     type: formData.type || TaskType.TASK,
-                    start_date: formData.start_date || undefined,
-                    due_date: formData.due_date || undefined,
-                    assignee_id: formData.assignee_id || undefined,
-                    labels: formData.labels || [],
-                    category: formData.category || undefined,
-                    team: formData.team || undefined,
+                    start_date: formData.start_date,
+                    due_date: formData.due_date,
+                    assignee_id: formData.assignee_id,
+                    labels: formData.labels?.map(l => Number(l)) || [],
+                    category: formData.category,
+                    team: formData.team ? {
+                        id: Number(formData.team),
+                        name: ''  // This will be filled by the backend
+                    } : undefined,
                     time_tracking: {
-                        logged: formData.time_tracking?.logged || '0',
-                        remaining: formData.time_tracking?.remaining || '0'
+                        original_estimate: 0,
+                        remaining_estimate: 0,
+                        unit: TimeUnit.HOURS
                     }
-                }
-                await taskApi.createTask(teamId, requiredFields)
+                };
+                await taskApi.createTask(teamId, requiredFields);
                 toast({
                     title: "Task created",
                     description: "The new task has been created successfully."
-                })
+                });
             }
-            onClose()
+            onClose();
         } catch (err) {
-            console.error('Failed to save task:', err)
+            console.error('Failed to save task:', err);
             toast({
                 title: "Error",
                 description: "Failed to save the task. Please try again.",
                 variant: "destructive"
-            })
+            });
         }
-    }
+    };
 
     const handleTimeTrackingChange = (field: 'logged' | 'remaining', value: string) => {
         setFormData(prev => ({
@@ -250,7 +271,7 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
 
                                 {/* Comments Section */}
                                 {task && (
-                                    <div className="space-y-4">
+                                    <div className="space-y-4 max-h-[400px] overflow-y-auto mb-16">
                                         <h3 className="text-sm font-medium">Comments</h3>
                                         <div className="space-y-4">
                                             <div className="flex gap-2">
