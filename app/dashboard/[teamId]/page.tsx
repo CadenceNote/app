@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Calendar, ListTodo, Users } from 'lucide-react';
+import { Plus, Calendar, ListTodo, Users, Info } from 'lucide-react';
 import { MeetingList } from '@/components/meetings/MeetingList';
 import { TaskList } from '@/components/tasks/TaskList';
 import { CreateMeetingModal } from '@/components/meetings/CreateMeetingModal';
@@ -86,95 +86,98 @@ export default function TeamDashboardPage() {
     }, [teamId]);
 
     return (
-        <div className="container mx-auto p-6 space-y-8">
-            <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                    <h1 className="text-3xl font-bold tracking-tight">Team Dashboard</h1>
-                    <p className="text-muted-foreground">
-                        Manage your team&apos;s meetings and tasks
-                    </p>
-                </div>
-                <div className="flex gap-3">
-                    <Button onClick={() => setIsCreateTaskModalOpen(true)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        New Task
-                    </Button>
-                    <Button onClick={() => setIsCreateModalOpen(true)} variant="default">
-                        <Plus className="h-4 w-4 mr-2" />
-                        New Meeting
-                    </Button>
+        <div className="min-h-screen bg-[#F9FAFB]">
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-200">
+                <div className="w-full">
+                    <div className="h-16">
+                        <div className="h-full max-w-[2000px] mx-auto px-6 flex justify-between items-center">
+                            <div className="space-y-1">
+                                <h1 className="text-xl font-semibold text-gray-900">Team Dashboard</h1>
+                                <p className="text-sm text-gray-500">
+                                    Manage your team&apos;s meetings and tasks
+                                </p>
+                            </div>
+                            <div className="flex gap-3">
+                                <Button onClick={() => setIsCreateTaskModalOpen(true)} variant="outline">
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    New Task
+                                </Button>
+                                <Button onClick={() => setIsCreateModalOpen(true)}>
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    New Meeting
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Upcoming Meetings</CardTitle>
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.meetings.upcoming}</div>
-                        <p className="text-xs text-muted-foreground">
-                            +{stats.meetings.thisWeek} scheduled for this week
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Tasks</CardTitle>
-                        <ListTodo className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.tasks.active}</div>
-                        <p className="text-xs text-muted-foreground">
-                            {stats.tasks.dueThisWeek} due this week
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.team.total}</div>
-                        <p className="text-xs text-muted-foreground">
-                            {stats.team.online} online now
-                        </p>
-                    </CardContent>
-                </Card>
+            <div className="w-full">
+                <div className="max-w-[2000px] mx-auto px-6 py-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <Card className="bg-white">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Upcoming Meetings</CardTitle>
+                                <Calendar className="h-4 w-4 text-blue-600" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{stats.meetings.upcoming}</div>
+                                <p className="text-xs text-gray-500">
+                                    +{stats.meetings.thisWeek} scheduled this week
+                                </p>
+                            </CardContent>
+                        </Card>
+                        <Card className="bg-white">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Active Tasks</CardTitle>
+                                <ListTodo className="h-4 w-4 text-blue-600" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{stats.tasks.active}</div>
+                                <p className="text-xs text-gray-500">
+                                    {stats.tasks.dueThisWeek} due this week
+                                </p>
+                            </CardContent>
+                        </Card>
+                        <Card className="bg-white">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+                                <Users className="h-4 w-4 text-blue-600" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{stats.team.total}</div>
+                                <p className="text-xs text-gray-500">
+                                    {stats.team.online} online now
+                                </p>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-sm p-6">
+                        <Tabs defaultValue="meetings" className="space-y-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <TabsList className="bg-gray-100">
+                                    <TabsTrigger value="meetings">Meetings</TabsTrigger>
+                                    <TabsTrigger value="tasks">Tasks</TabsTrigger>
+                                </TabsList>
+                                <div className="text-sm text-gray-500 flex items-center">
+                                    <Info className="h-4 w-4 mr-2" />
+                                    Press <kbd className="mx-1 px-1.5 py-0.5 bg-gray-100 rounded border text-xs">/</kbd>
+                                    in meetings to create tasks
+                                </div>
+                            </div>
+
+                            <TabsContent value="meetings" className="space-y-4">
+                                <MeetingList teamId={teamId} />
+                            </TabsContent>
+
+                            <TabsContent value="tasks" className="space-y-4">
+                                <TaskList teamId={teamId} />
+                            </TabsContent>
+                        </Tabs>
+                    </div>
+                </div>
             </div>
-
-            <Tabs defaultValue="meetings" className="space-y-6">
-                <TabsList>
-                    <TabsTrigger value="meetings">Meetings</TabsTrigger>
-                    <TabsTrigger value="tasks">Tasks</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="meetings" className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <h2 className="text-2xl font-semibold tracking-tight">Team Meetings</h2>
-                            <p className="text-sm text-muted-foreground">
-                                Schedule and manage your team meetings
-                            </p>
-                        </div>
-                    </div>
-                    <MeetingList teamId={teamId} />
-                </TabsContent>
-
-                <TabsContent value="tasks" className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <h2 className="text-2xl font-semibold tracking-tight">Team Tasks</h2>
-                            <p className="text-sm text-muted-foreground">
-                                Track and manage your team tasks
-                            </p>
-                        </div>
-                    </div>
-                    <TaskList teamId={teamId} />
-                </TabsContent>
-            </Tabs>
 
             <CreateMeetingModal
                 open={isCreateModalOpen}

@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { Task, TaskStatus, TaskPriority, TaskType } from '@/lib/types/task';
+import { Task, TaskStatus, TaskPriority, TaskType, TimeUnit } from '@/lib/types/task';
 import { taskApi, CreateTaskInput } from '@/services/taskApi';
 import { useToast } from '@/hooks/use-toast';
 
@@ -113,9 +113,17 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                     assignee_id: formData.assignee_id,
                     labels: formData.labels?.map(l => Number(l)) || [],
                     category: formData.category,
-                    team: formData.team
+                    team: formData.team,
+                    time_tracking: {
+                        original_estimate: 0,
+                        remaining_estimate: 0,
+                        unit: TimeUnit.HOURS
+                    }
                 };
-                await taskApi.createTask(teamId, requiredFields);
+                const createdTask = await taskApi.createTask(teamId, requiredFields);
+                if (onTaskUpdate) {
+                    onTaskUpdate(createdTask);
+                }
                 toast({
                     title: "Task created",
                     description: "The new task has been created successfully."

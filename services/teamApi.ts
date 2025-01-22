@@ -1,5 +1,5 @@
 import api from './api';
-import { Team, CreateTeamInput, UpdateTeamInput, AddTeamMemberInput } from '@/lib/types/team';
+import { Team, CreateTeamInput, UpdateTeamInput, AddTeamMemberInput, TeamRole } from '@/lib/types/team';
 
 export const teamApi = {
     // Get all teams for the current user
@@ -39,6 +39,12 @@ export const teamApi = {
             role: data.role?.toUpperCase() || 'MEMBER'
         };
         const response = await api.post(`/teams/${teamId}/members/`, formattedData);
+        return response.data;
+    },
+
+    // Get team member role
+    getTeamMemberRole: async (teamId: number): Promise<{ role: TeamRole }> => {
+        const response = await api.get(`/teams/${teamId}/member-role/`);
         return response.data;
     }
 };
