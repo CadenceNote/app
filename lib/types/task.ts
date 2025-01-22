@@ -129,3 +129,28 @@ export interface CreateTaskInput {
         name: string
     } | null
 }
+
+export interface TaskCommandParts {
+    title: string;
+    assignees: string[];  // User IDs
+    priority?: TaskPriority;
+    dueDate?: string;
+    startDate?: string;
+    type?: TaskType;
+    description?: string;
+}
+
+export interface TaskBadge {
+    id: number;
+    team_ref_number: string;
+    title: string;
+    status: TaskStatus;
+    isNew?: boolean;
+}
+
+export interface UserBadge {
+    id: number;
+    name: string;
+    email: string;
+    avatar?: string;
+}
