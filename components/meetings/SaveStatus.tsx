@@ -21,7 +21,11 @@ export function SaveStatus({ lastSaved, isSaving }: SaveStatusProps) {
                     <span className="h-2 w-2 rounded-full bg-green-500" />
                     {`Last saved ${formatDistanceToNow(new Date(lastSaved), { addSuffix: true, includeSeconds: true })}`}
                 </>
-            ) : null}
+            ) : <>
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                Auto-save enabled
+            </>
+            }
         </div>
     );
 } 

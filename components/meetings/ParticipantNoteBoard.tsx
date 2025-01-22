@@ -30,6 +30,7 @@ import { Task } from '@/lib/types/task';
 import { debounce } from '@/lib/utils';
 import { UserDetailModal } from './UserDetailModal';
 import { TaskDetail } from '../tasks/TaskDetail';
+import { Skeleton } from '../ui/skeleton';
 
 // Add role badge color mapping
 const getRoleBadgeStyles = (role: TeamRole) => {
@@ -193,7 +194,7 @@ export function ParticipantNoteBoard({
             } finally {
                 setIsSaving(false);
             }
-        }, 1000)
+        }, 500)
     ).current;
 
     // useEffect(() => {
@@ -254,21 +255,21 @@ export function ParticipantNoteBoard({
         }
     };
 
-    // Modified initial data fetch
+    // Modified initial data fetch to notify parent when ready
     useEffect(() => {
-        setIsLoading(true);
-        Promise.all([
-            loadParticipantNotes(),
-            loadTeamTasks()
-        ]).finally(() => {
-            setIsLoading(false);
-        });
+        const loadData = async () => {
+            setIsLoading(true);
+            try {
+                await Promise.all([
+                    loadParticipantNotes(),
+                    loadTeamTasks()
+                ]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadData();
     }, [teamId, meetingId, participants]);
-
-    // Don't render anything while loading
-    if (isLoading) {
-        return <div>Loading...</div>;
-    }
 
     const updateParticipantNote = (participantId: number, type: 'todo' | 'blocker' | 'done', index: number, content: string) => {
         if (!canEditNotes(participantId, userRole, currentUserId)) {
@@ -292,46 +293,6 @@ export function ParticipantNoteBoard({
         debouncedSave();
     };
 
-    const addParticipantNote = (participantId: number, type: 'todo' | 'blocker' | 'done') => {
-        if (!canEditNotes(participantId, userRole, currentUserId)) {
-            toast({
-                title: "Permission Denied",
-                description: "You can only add notes to your own section unless you're an admin or manager.",
-                variant: "destructive"
-            });
-            return;
-        }
-
-        setNotes(prev => {
-            const participantNotes = { ...prev[participantId] };
-            const newNote = {
-                id: crypto.randomUUID(),
-                type,
-                content: '',
-                badges: []
-            };
-
-            participantNotes[type] = [...participantNotes[type], newNote];
-            return { ...prev, [participantId]: participantNotes };
-        });
-
-        // Use setTimeout to ensure the new note is rendered before focusing
-        setTimeout(() => {
-            // Find all note editors in the specific section
-            const participantCard = document.querySelector(`[data-participant-id="${participantId}"]`);
-            if (participantCard) {
-                const sectionDiv = participantCard.querySelector(`[data-note-section="${type}"]`);
-                if (sectionDiv) {
-                    const noteElements = sectionDiv.querySelectorAll('.ProseMirror');
-                    const lastNote = noteElements[noteElements.length - 1];
-                    if (lastNote) {
-                        (lastNote as HTMLElement).focus();
-                    }
-                }
-            }
-        }, 0);
-    };
-
     const deleteParticipantNote = (participantId: number, type: 'todo' | 'blocker' | 'done', index: number) => {
         if (!canEditNotes(participantId, userRole, currentUserId)) {
             toast({
@@ -346,6 +307,44 @@ export function ParticipantNoteBoard({
             const participantNotes = { ...prev[participantId] };
             participantNotes[type] = participantNotes[type].filter((_, i) => i !== index);
             return { ...prev, [participantId]: participantNotes };
+        });
+
+        // Trigger auto-save after deletion
+        debouncedSave();
+    };
+
+    const addParticipantNote = (participantId: number, type: 'todo' | 'blocker' | 'done') => {
+        if (!canEditNotes(participantId, userRole, currentUserId)) {
+            toast({
+                title: "Permission Denied",
+                description: "You can only add notes to your own section unless you're an admin or manager.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        const newNoteId = crypto.randomUUID();
+        setNotes(prev => {
+            const participantNotes = { ...prev[participantId] };
+            const newNote = {
+                id: newNoteId,
+                type,
+                content: '',
+                badges: []
+            };
+
+            participantNotes[type] = [...participantNotes[type], newNote];
+            return { ...prev, [participantId]: participantNotes };
+        });
+
+        // Use requestAnimationFrame to ensure the DOM has updated
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                const editor = document.querySelector(`[data-note-id="${newNoteId}"] .ProseMirror`);
+                if (editor instanceof HTMLElement) {
+                    editor.focus();
+                }
+            });
         });
     };
 
@@ -386,7 +385,7 @@ export function ParticipantNoteBoard({
         if (!tasks.length) return null;
 
         return (
-            <div key={note.id} className="relative w-full [&_.ProseMirror:focus]:ring-0 [&_.ProseMirror:focus]:border-none">
+            <div key={note.id} data-note-id={note.id} className="relative w-full [&_.ProseMirror:focus]:ring-0 [&_.ProseMirror:focus]:border-none">
                 <NoteEditor
                     key={`${note.id}-${tasks.length}`} // Add key to force re-render when tasks change
                     content={note.content}
