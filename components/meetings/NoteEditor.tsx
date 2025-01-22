@@ -19,6 +19,7 @@ import { Task } from '@/lib/types/task';
 import { Extension } from '@tiptap/core';
 import { Plugin } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
+import { cn } from '@/lib/utils';
 
 declare module '@tiptap/extension-mention' {
     interface MentionOptions {
@@ -64,58 +65,97 @@ interface MentionListProps {
         type: 'user' | 'task';
     }>;
     command: (item: { id: number; label: string; type: 'user' | 'task' }) => void;
+    selectedIndex?: number;
 }
 
-const MentionList = ({ items, command }: MentionListProps) => {
+const MentionList = ({ items = [], command, selectedIndex = 0 }: MentionListProps) => {
+    // Filter items by type first to avoid index mismatches
+    const userItems = items.filter(item => item.type === 'user');
+    const taskItems = items.filter(item => item.type === 'task');
+
+    // Calculate the actual selected item based on the combined list
+    const selectedItem = items[selectedIndex];
+    const isSelectedUser = selectedItem?.type === 'user';
+
     return (
         <div className="overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
             {items.length > 0 ? (
                 <>
-                    {items.some(item => item.type === 'user') && (
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Users</div>
-                    )}
-                    {items.filter(item => item.type === 'user').map(item => (
-                        <button
-                            key={`user-${item.id}`}
-                            className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                            onClick={() => command(item)}
-                        >
-                            <div className="flex items-center gap-2">
-                                {item.icon ? (
-                                    <img src={item.icon} alt="" className="h-6 w-6 rounded-full" />
-                                ) : (
-                                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted">
-                                        {item.label.charAt(0)}
-                                    </div>
-                                )}
-                                <div className="flex flex-col">
-                                    <span>{item.label}</span>
-                                    {item.description && (
-                                        <span className="text-xs text-muted-foreground">{item.description}</span>
+                    {userItems.length > 0 && (
+                        <>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Users</div>
+                            {userItems.map((item) => (
+                                <button
+                                    key={`user-${item.id}`}
+                                    className={cn(
+                                        "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                                        selectedItem?.id === item.id && isSelectedUser
+                                            ? "bg-accent text-accent-foreground"
+                                            : "hover:bg-accent/50 hover:text-accent-foreground"
                                     )}
-                                </div>
-                            </div>
-                        </button>
-                    ))}
-                    {items.some(item => item.type === 'task') && (
-                        <div className="mt-2 px-2 py-1.5 text-xs font-semibold text-muted-foreground">Tasks</div>
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        command({
+                                            id: String(item.id),
+                                            label: item.label,
+                                            type: item.type
+                                        });
+                                    }}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {item.icon ? (
+                                            <img src={item.icon} alt="" className="h-6 w-6 rounded-full" />
+                                        ) : (
+                                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted">
+                                                {item.label.charAt(0)}
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col">
+                                            <span>{item.label}</span>
+                                            {item.description && (
+                                                <span className="text-xs text-muted-foreground">{item.description}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </>
                     )}
-                    {items.filter(item => item.type === 'task').map(item => (
-                        <button
-                            key={`task-${item.id}`}
-                            className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                            onClick={() => command(item)}
-                        >
-                            <div className="flex items-center gap-2">
-                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted">
-                                    #
-                                </div>
-                                <div className="flex flex-col">
-                                    <span>{item.label}</span>
-                                </div>
-                            </div>
-                        </button>
-                    ))}
+                    {taskItems.length > 0 && (
+                        <>
+                            <div className="mt-2 px-2 py-1.5 text-xs font-semibold text-muted-foreground">Tasks</div>
+                            {taskItems.map((item) => (
+                                <button
+                                    key={`task-${item.id}`}
+                                    className={cn(
+                                        "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                                        selectedItem?.id === item.id && !isSelectedUser
+                                            ? "bg-accent text-accent-foreground"
+                                            : "hover:bg-accent/50 hover:text-accent-foreground"
+                                    )}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        command({
+                                            id: String(item.id),
+                                            label: item.label,
+                                            type: item.type
+                                        });
+                                    }}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted">
+                                            #
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span>{item.label}</span>
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </>
+                    )}
                 </>
             ) : (
                 <div className="px-2 py-1.5 text-sm text-muted-foreground">
@@ -264,43 +304,147 @@ const SlashCommands = Extension.create<SlashCommandsOptions>({
 
                         if (isStart || isAfterSpace) {
                             // Show command menu
-                            const element = document.createElement('div');
-                            const root = createRoot(element);
+                            let element = document.createElement('div');
+                            let root = createRoot(element);
                             let popup: TippyInstance | null = null;
+                            let selectedIndex = 0;
+                            let isCleaningUp = false;
+                            let isDestroyed = false;
 
-                            root.render(
-                                <div className="overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-                                    <button
-                                        className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                                        onClick={() => {
-                                            // Remove the slash character
-                                            view.dispatch(
-                                                view.state.tr.delete(
-                                                    $from.pos - (isAfterSpace ? 0 : 1),
-                                                    $from.pos + 1
-                                                )
-                                            );
+                            const cleanup = () => {
+                                if (isCleaningUp || isDestroyed) return;
+                                isCleaningUp = true;
 
-                                            // Call the onCommand callback
-                                            this.options.onCommand?.('createTask', {
-                                                range: { from: $from.pos, to: $from.pos }
-                                            });
+                                // Remove event listeners first
+                                document.removeEventListener('keydown', handleKeyDown, { capture: true });
+                                document.removeEventListener('click', handleClickOutside);
 
-                                            // Clean up
-                                            popup?.destroy();
-                                            root.unmount();
-                                            element.remove();
-                                        }}
-                                    >
-                                        <div className="flex flex-col">
-                                            <span>Create Task</span>
-                                            <span className="text-xs text-muted-foreground">
-                                                Create a new task and mention it
-                                            </span>
-                                        </div>
-                                    </button>
-                                </div>
-                            );
+                                // Clean up tippy
+                                if (popup) {
+                                    popup.destroy();
+                                    popup = null;
+                                }
+
+                                // Clean up React root
+                                if (root) {
+                                    root.unmount();
+                                }
+
+                                // Clean up DOM
+                                if (element) {
+                                    element.remove();
+                                }
+
+                                isDestroyed = true;
+                                isCleaningUp = false;
+                            };
+
+                            const handleClickOutside = (e: MouseEvent) => {
+                                if (!element?.contains(e.target as Node)) {
+                                    cleanup();
+                                }
+                            };
+
+                            const renderCommandMenu = () => {
+                                if (isDestroyed) return;
+                                root.render(
+                                    <div className="overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                                        <button
+                                            className={cn(
+                                                "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                                                selectedIndex === 0
+                                                    ? "bg-accent text-accent-foreground"
+                                                    : "hover:bg-accent/50 hover:text-accent-foreground"
+                                            )}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+
+                                                // Delete the slash character first
+                                                view.dispatch(
+                                                    view.state.tr.delete(
+                                                        $from.pos - (isAfterSpace ? 0 : 1),
+                                                        $from.pos
+                                                    )
+                                                );
+
+                                                // Call the onCommand callback
+                                                this.options.onCommand?.('createTask', {
+                                                    range: { from: $from.pos, to: $from.pos }
+                                                });
+
+                                                // Clean up
+                                                cleanup();
+                                            }}
+                                        >
+                                            <div className="flex flex-col">
+                                                <span>Create Task</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    Create a new task and mention it
+                                                </span>
+                                            </div>
+                                        </button>
+                                    </div>
+                                );
+                            };
+
+                            const handleKeyDown = (event: KeyboardEvent) => {
+                                if (isDestroyed) return false;
+
+                                // Only prevent default for specific keys
+                                if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab'].includes(event.key)) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                }
+
+                                if (event.key === 'Escape' || event.key === 'Backspace') {
+                                    // Delete the slash character on backspace
+                                    if (event.key === 'Backspace') {
+                                        view.dispatch(
+                                            view.state.tr.delete(
+                                                $from.pos - (isAfterSpace ? 0 : 1),
+                                                $from.pos
+                                            )
+                                        );
+                                    }
+                                    cleanup();
+                                    return true;
+                                }
+
+                                if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                                    selectedIndex = 0; // Only one option for now
+                                    renderCommandMenu();
+                                    return true;
+                                }
+
+                                if (event.key === 'Enter' || event.key === 'Tab') {
+                                    // Delete the slash character first
+                                    view.dispatch(
+                                        view.state.tr.delete(
+                                            $from.pos - (isAfterSpace ? 0 : 1),
+                                            $from.pos
+                                        )
+                                    );
+
+                                    // Call the onCommand callback
+                                    this.options.onCommand?.('createTask', {
+                                        range: { from: $from.pos, to: $from.pos }
+                                    });
+
+                                    // Clean up
+                                    cleanup();
+                                    return true;
+                                }
+
+                                return false;
+                            };
+
+                            // Insert the slash character
+                            // view.dispatch(
+                            //     view.state.tr.insertText('/')
+                            // );
+
+                            renderCommandMenu();
 
                             const coords = view.coordsAtPos($from.pos);
                             popup = tippy(document.body, {
@@ -320,20 +464,21 @@ const SlashCommands = Extension.create<SlashCommandsOptions>({
                                 interactive: true,
                                 trigger: 'manual',
                                 placement: 'bottom-start',
+                                onHide: () => {
+                                    if (!isCleaningUp) {
+                                        cleanup();
+                                    }
+                                }
                             });
 
-                            const handleClickOutside = (e: MouseEvent) => {
-                                if (!element.contains(e.target as Node)) {
-                                    popup?.destroy();
-                                    root.unmount();
-                                    element.remove();
-                                    document.removeEventListener('click', handleClickOutside);
-                                }
-                            };
+                            // Add keyboard event listener with capture to prevent only specific keys
+                            document.addEventListener('keydown', handleKeyDown, { capture: true });
 
                             // Add click outside handler after a small delay to prevent immediate trigger
                             setTimeout(() => {
-                                document.addEventListener('click', handleClickOutside);
+                                if (!isDestroyed) {
+                                    document.addEventListener('click', handleClickOutside);
+                                }
                             }, 0);
 
                             return true;
@@ -416,40 +561,17 @@ export function NoteEditor({
                         let popup: TippyInstance | null = null;
                         let element: HTMLElement | null = null;
                         let root: ReturnType<typeof createRoot> | null = null;
-
-                        const cleanup = () => {
-                            if (popup) {
-                                popup.destroy();
-                                popup = null;
-                            }
-                            if (root) {
-                                setTimeout(() => {
-                                    root?.unmount();
-                                    root = null;
-                                }, 0);
-                            }
-                            if (element) {
-                                element.remove();
-                                element = null;
-                            }
-                        };
+                        let selectedIndex = 0;
+                        let currentItems: any[] = [];
+                        let currentCommand: ((item: any) => void) | null = null;
 
                         return {
                             onStart: (props) => {
                                 element = document.createElement('div');
                                 root = createRoot(element);
-                                root.render(
-                                    <MentionList
-                                        items={props.items}
-                                        command={item => {
-                                            props.command({
-                                                id: String(item.id),
-                                                label: item.label,
-                                                type: 'user'
-                                            });
-                                        }}
-                                    />
-                                );
+                                selectedIndex = 0;
+                                currentItems = props.items || [];
+                                currentCommand = props.command;
 
                                 popup = tippy(document.body, {
                                     getReferenceClientRect: props.clientRect,
@@ -460,29 +582,85 @@ export function NoteEditor({
                                     trigger: 'manual',
                                     placement: 'bottom-start',
                                 });
-                            },
-                            onUpdate(props) {
-                                if (!popup || !element || !root) return;
 
                                 root.render(
                                     <MentionList
-                                        items={props.items}
-                                        command={item => {
-                                            props.command({
-                                                id: String(item.id),
-                                                label: item.label,
-                                                type: 'user'
-                                            });
-                                        }}
+                                        items={currentItems}
+                                        command={currentCommand}
+                                        selectedIndex={selectedIndex}
                                     />
                                 );
+                            },
+                            onUpdate: (props) => {
+                                if (!popup || !element || !root) return;
+                                currentItems = props.items || [];
+                                currentCommand = props.command;
 
                                 popup.setProps({
                                     getReferenceClientRect: props.clientRect,
                                 });
+
+                                root.render(
+                                    <MentionList
+                                        items={currentItems}
+                                        command={currentCommand}
+                                        selectedIndex={selectedIndex}
+                                    />
+                                );
                             },
-                            onKeyDown: handleMentionKeyDown,
-                            onExit: cleanup,
+                            onKeyDown: (props) => {
+                                if (props.event.key === 'ArrowUp') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    selectedIndex = selectedIndex <= 0 ? currentItems.length - 1 : selectedIndex - 1;
+                                    root?.render(
+                                        <MentionList
+                                            items={currentItems}
+                                            command={currentCommand}
+                                            selectedIndex={selectedIndex}
+                                        />
+                                    );
+                                    return true;
+                                }
+
+                                if (props.event.key === 'ArrowDown') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    selectedIndex = selectedIndex >= currentItems.length - 1 ? 0 : selectedIndex + 1;
+                                    root?.render(
+                                        <MentionList
+                                            items={currentItems}
+                                            command={currentCommand}
+                                            selectedIndex={selectedIndex}
+                                        />
+                                    );
+                                    return true;
+                                }
+
+                                if (props.event.key === 'Enter' || props.event.key === 'Tab') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    if (currentItems[selectedIndex] && currentCommand) {
+                                        currentCommand({
+                                            id: String(currentItems[selectedIndex].id),
+                                            label: currentItems[selectedIndex].label,
+                                            type: currentItems[selectedIndex].type
+                                        });
+                                        popup?.destroy();
+                                    }
+                                    return true;
+                                }
+
+                                return false;
+                            },
+                            onExit: () => {
+                                popup?.destroy();
+                                root?.unmount();
+                                element?.remove();
+                            },
                         };
                     },
                 }
@@ -527,43 +705,18 @@ export function NoteEditor({
                         let popup: TippyInstance | null = null;
                         let element: HTMLElement | null = null;
                         let root: ReturnType<typeof createRoot> | null = null;
-
-                        const cleanup = () => {
-                            if (popup) {
-                                popup.destroy();
-                                popup = null;
-                            }
-                            if (root) {
-                                setTimeout(() => {
-                                    root?.unmount();
-                                    root = null;
-                                }, 0);
-                            }
-                            if (element) {
-                                element.remove();
-                                element = null;
-                            }
-                        };
+                        let selectedIndex = 0;
+                        let currentItems: any[] = [];
+                        let currentCommand: ((item: any) => void) | null = null;
 
                         return {
                             onStart: (props) => {
                                 console.log('Task mention suggestion started', props);
                                 element = document.createElement('div');
                                 root = createRoot(element);
-
-                                root.render(
-                                    <MentionList
-                                        items={props.items}
-                                        command={item => {
-                                            console.log('Task mention selected:', item);
-                                            props.command({
-                                                id: String(item.id),
-                                                label: item.label,
-                                                type: 'task'
-                                            });
-                                        }}
-                                    />
-                                );
+                                selectedIndex = 0;
+                                currentItems = props.items || [];
+                                currentCommand = props.command;
 
                                 popup = tippy(document.body, {
                                     getReferenceClientRect: props.clientRect,
@@ -574,30 +727,93 @@ export function NoteEditor({
                                     trigger: 'manual',
                                     placement: 'bottom-start',
                                 });
-                            },
-                            onUpdate(props) {
-                                if (!popup || !element || !root) return;
 
                                 root.render(
                                     <MentionList
-                                        items={props.items}
-                                        command={item => {
-                                            console.log('Task mention selected:', item);
-                                            props.command({
-                                                id: String(item.id),
-                                                label: item.label,
-                                                type: 'task'
-                                            });
-                                        }}
+                                        items={currentItems}
+                                        command={currentCommand}
+                                        selectedIndex={selectedIndex}
                                     />
                                 );
+                            },
+                            onUpdate(props) {
+                                if (!popup || !element || !root) return;
+                                currentItems = props.items || [];
+                                currentCommand = props.command;
 
+                                root.render(
+                                    <MentionList
+                                        items={currentItems}
+                                        command={currentCommand}
+                                        selectedIndex={selectedIndex}
+                                    />
+                                );
                                 popup.setProps({
                                     getReferenceClientRect: props.clientRect,
                                 });
                             },
-                            onKeyDown: handleMentionKeyDown,
-                            onExit: cleanup,
+                            onKeyDown: (props) => {
+                                if (props.event.key === 'ArrowUp') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    selectedIndex = selectedIndex <= 0 ? currentItems.length - 1 : selectedIndex - 1;
+                                    root?.render(
+                                        <MentionList
+                                            items={currentItems}
+                                            command={currentCommand}
+                                            selectedIndex={selectedIndex}
+                                        />
+                                    );
+                                    return true;
+                                }
+
+                                if (props.event.key === 'ArrowDown') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    selectedIndex = selectedIndex >= currentItems.length - 1 ? 0 : selectedIndex + 1;
+                                    root?.render(
+                                        <MentionList
+                                            items={currentItems}
+                                            command={currentCommand}
+                                            selectedIndex={selectedIndex}
+                                        />
+                                    );
+                                    return true;
+                                }
+
+                                if (props.event.key === 'Enter' || props.event.key === 'Tab') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    if (currentItems[selectedIndex] && currentCommand) {
+                                        currentCommand({
+                                            id: String(currentItems[selectedIndex].id),
+                                            label: currentItems[selectedIndex].label,
+                                            type: currentItems[selectedIndex].type
+                                        });
+                                        popup?.destroy();
+                                    }
+                                    return true;
+                                }
+
+                                return false;
+                            },
+                            onExit: () => {
+                                if (popup) {
+                                    popup.destroy();
+                                    popup = null;
+                                }
+                                if (root) {
+                                    root.unmount();
+                                    root = null;
+                                }
+                                if (element) {
+                                    element.remove();
+                                    element = null;
+                                }
+                            },
                         };
                     },
                 }
@@ -605,7 +821,11 @@ export function NoteEditor({
             SlashCommands.configure({
                 onCommand: (command: string, attrs: { range: { from: number; to: number } }) => {
                     if (command === 'createTask') {
-                        setCommandRange(attrs.range);
+                        // Store the range for later deletion
+                        setCommandRange({
+                            from: attrs.range.from - 1, // Include the slash
+                            to: attrs.range.to
+                        });
                         setShowTaskModal(true);
                     }
                 },
@@ -633,13 +853,27 @@ export function NoteEditor({
                 return false;
             },
             handleKeyDown: (view, event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                    if (onEnterKey) {
-                        event.preventDefault();
-                        onEnterKey();
-                        return true;
-                    }
+                // Check if we have an active suggestion
+                const userSuggestion = userMentionPluginKey.getState(view.state);
+                const taskSuggestion = taskMentionPluginKey.getState(view.state);
+                const slashCommandsState = view.state.plugins.find(plugin => plugin.key?.toString() === 'slashCommands')?.getState(view.state);
+
+                // If any suggestion or command menu is active, let the suggestion handler deal with it
+                if ((userSuggestion && userSuggestion.active) ||
+                    (taskSuggestion && taskSuggestion.active) ||
+                    slashCommandsState) {
+                    return false; // Return false to let the suggestion handler handle the event
                 }
+
+                // Handle Enter key for new note creation when no suggestions are active
+                if (event.key === 'Enter' && !event.shiftKey && onEnterKey) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    onEnterKey();
+                    return true;
+                }
+
                 return false;
             },
             handleDOMEvents: {
@@ -746,59 +980,21 @@ export function NoteEditor({
         };
     }, [editor, content]);
 
-    // Fix keyboard navigation in mention suggestions
-    const handleMentionKeyDown = (props: { event: KeyboardEvent; items: any[]; command: (attrs: any) => void; selectedIndex: number }) => {
-        console.log('handleMentionKeyDown called', {
-            key: props.event.key,
-            items: props.items,
-            selectedIndex: props.selectedIndex
-        });
-
-        if (props.event.key === 'Escape') {
-            console.log('Escape pressed, closing suggestion');
-            return true;
-        }
-
-        // Handle keyboard navigation
-        if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab'].includes(props.event.key)) {
-            console.log('Navigation key pressed:', props.event.key);
-            props.event.preventDefault();
-            const items = props.items || [];
-            console.log('Available items:', items);
-
-            if ((props.event.key === 'Enter' || props.event.key === 'Tab') && items.length > 0) {
-                console.log('Selection attempted with index:', props.selectedIndex);
-                const selectedItem = items[props.selectedIndex];
-                if (selectedItem) {
-                    console.log('Selected item:', selectedItem);
-                    props.command(selectedItem);
-                }
-                return true;
-            }
-
-            if (items.length > 0) {
-                const direction = props.event.key === 'ArrowUp' ? -1 : 1;
-                const newIndex = (props.selectedIndex + direction + items.length) % items.length;
-                console.log('New selected index:', newIndex);
-                props.command({ selectedIndex: newIndex });
-                return true;
-            }
-        }
-        return false;
-    };
-
     // Handle task creation and mention insertion
     const handleTaskCreate = (task: Task) => {
         console.log("handleTaskCreate called with task:", task);
         if (editor && commandRange) {
-            // Delete the slash command text
-            editor.chain().focus().deleteRange(commandRange).run();
+            // Delete the slash command text first
+            editor.chain().focus().deleteRange({
+                from: commandRange.from,
+                to: commandRange.to
+            }).run();
 
             // Insert task mention at the command range position
             editor.chain()
                 .focus()
                 .insertContentAt(commandRange.from, [{
-                    type: 'taskMention',  // This matches our TaskMention extension name
+                    type: 'taskMention',
                     attrs: {
                         id: String(task.id),
                         label: `${task.team_ref_number} ${task.title}`,

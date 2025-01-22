@@ -1,3 +1,5 @@
+import { formatDistanceToNow } from "date-fns";
+
 interface SaveStatusProps {
     lastSaved: Date | null;
     isSaving: boolean;
@@ -17,7 +19,7 @@ export function SaveStatus({ lastSaved, isSaving }: SaveStatusProps) {
             ) : lastSaved ? (
                 <>
                     <span className="h-2 w-2 rounded-full bg-green-500" />
-                    {`Last saved at ${new Date(lastSaved).toLocaleTimeString()}`}
+                    {`Last saved ${formatDistanceToNow(new Date(lastSaved), { addSuffix: true, includeSeconds: true })}`}
                 </>
             ) : null}
         </div>
