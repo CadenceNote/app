@@ -362,7 +362,7 @@ export function NoteEditor({
     onMention,
     onMentionClick,
     participants,
-    tasks = [],
+    tasks,
     placeholder,
     readOnly,
     onTaskCreate,
@@ -373,9 +373,10 @@ export function NoteEditor({
     const prevTasksRef = useRef(tasks);
     const [showTaskModal, setShowTaskModal] = useState(false);
     const [commandRange, setCommandRange] = useState<{ from: number; to: number } | null>(null);
+    const [editor, setEditor] = useState<ReturnType<typeof useEditor> | null>(null);
 
     // Create editor instance
-    const editor = useEditor({
+    const editorInstance = useEditor({
         extensions: [
             StarterKit.configure({
                 history: {},
@@ -496,9 +497,23 @@ export function NoteEditor({
                     char: '#',
                     pluginKey: taskMentionPluginKey,
                     items: ({ query }) => {
-                        console.log('Task mention query:', query);
-                        console.log('Available tasks:', tasks);
-                        const filteredTasks = tasks
+                        // Use both prevTasksRef.current and tasks to ensure we have the latest tasks
+                        const allTasks = tasks ? [...tasks] : [];
+
+                        // Add any tasks from prevTasksRef that aren't in tasks
+                        if (prevTasksRef.current) {
+                            prevTasksRef.current.forEach(prevTask => {
+                                if (!allTasks.some(t => t.id === prevTask.id)) {
+                                    allTasks.push(prevTask);
+                                }
+                            });
+                        }
+
+                        // Sort tasks by id descending to show newest first
+                        allTasks.sort((a, b) => b.id - a.id);
+
+                        console.log('Task mention suggestion - allTasks:', allTasks);
+                        return allTasks
                             .filter(task =>
                                 `${task.team_ref_number} ${task.title}`.toLowerCase().includes(query.toLowerCase())
                             )
@@ -507,8 +522,6 @@ export function NoteEditor({
                                 label: `${task.team_ref_number} ${task.title}`,
                                 type: 'task' as const
                             }));
-                        console.log('Filtered tasks:', filteredTasks);
-                        return filteredTasks;
                     },
                     render: () => {
                         let popup: TippyInstance | null = null;
@@ -516,7 +529,6 @@ export function NoteEditor({
                         let root: ReturnType<typeof createRoot> | null = null;
 
                         const cleanup = () => {
-                            console.log('Cleaning up task mention popup');
                             if (popup) {
                                 popup.destroy();
                                 popup = null;
@@ -660,11 +672,6 @@ export function NoteEditor({
 
     // Update task mentions when tasks change
     useEffect(() => {
-        console.log('Tasks changed:', {
-            newTasks: tasks,
-            prevTasks: prevTasksRef.current
-        });
-
         if (!editor || tasks === prevTasksRef.current) return;
 
         const updatedTasks = tasks.filter(task => {
@@ -703,11 +710,12 @@ export function NoteEditor({
 
     // Store editor reference
     useEffect(() => {
-        editorRef.current = editor;
+        editorRef.current = editorInstance;
+        setEditor(editorInstance);
         return () => {
             editorRef.current?.destroy();
         };
-    }, [editor]);
+    }, [editorInstance]);
 
     // Handle content updates
     useEffect(() => {
@@ -779,6 +787,57 @@ export function NoteEditor({
         return false;
     };
 
+    // Handle task creation and mention insertion
+    const handleTaskCreate = (task: Task) => {
+        console.log("handleTaskCreate called with task:", task);
+        if (editor && commandRange) {
+            // Delete the slash command text
+            editor.chain().focus().deleteRange(commandRange).run();
+
+            // Insert task mention at the command range position
+            editor.chain()
+                .focus()
+                .insertContentAt(commandRange.from, [{
+                    type: 'taskMention',  // This matches our TaskMention extension name
+                    attrs: {
+                        id: String(task.id),
+                        label: `${task.team_ref_number} ${task.title}`,
+                        type: 'task'
+                    }
+                }])
+                .run();
+
+            // Clear command range
+            setCommandRange(null);
+        }
+
+        // Close modal
+        setShowTaskModal(false);
+
+        // Update tasks list immediately
+        if (tasks) {
+            const updatedTasks = [...tasks];
+            const existingIndex = updatedTasks.findIndex(t => t.id === task.id);
+            if (existingIndex >= 0) {
+                updatedTasks[existingIndex] = task;
+            } else {
+                updatedTasks.push(task);
+            }
+            prevTasksRef.current = updatedTasks;
+        }
+
+        // Call onTaskCreate to update parent's task list
+        if (onTaskCreate) {
+            onTaskCreate(task);
+        }
+    };
+
+    // Create a wrapper for TaskDetail's onTaskUpdate
+    const handleTaskDetailUpdate = (task: Task) => {
+        console.log("handleTaskDetailUpdate called with task:", task);
+        handleTaskCreate(task);
+    };
+
     if (!editor) {
         return null;
     }
@@ -847,10 +906,13 @@ export function NoteEditor({
             {showTaskModal && (
                 <TaskDetail
                     isOpen={showTaskModal}
-                    onClose={() => setShowTaskModal(false)}
+                    onClose={() => {
+                        setShowTaskModal(false);
+                        setCommandRange(null); // Clear command range if modal is closed without creating task
+                    }}
                     task={undefined}
                     teamId={teamId}
-                    onTaskUpdate={onTaskCreate}
+                    onTaskUpdate={handleTaskDetailUpdate}
                 />
             )}
         </>

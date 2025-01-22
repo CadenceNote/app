@@ -21,7 +21,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Save, Edit } from 'lucide-react';
+import { Edit, CheckCircle2, AlertCircle, ListTodo } from 'lucide-react';
 import { NoteEditor } from '@/components/meetings/NoteEditor';
 import { NoteRow } from '@/lib/types/note';
 import { MeetingNoteBlock } from '@/lib/types/meeting';
@@ -62,6 +62,7 @@ interface ParticipantNoteBoardProps {
         role?: TeamRole;
     }[];
     onSave: () => void;
+    onSaveStatusChange: (isSaving: boolean, lastSaved: Date | null) => void;
 }
 
 // Helper function to check if a user can edit notes
@@ -74,18 +75,56 @@ const canEditNotes = (participantId: number, userRole: TeamRole, currentUserId: 
     return currentUserId === participantId;
 };
 
+const getSectionIcon = (type: 'todo' | 'blocker' | 'done') => {
+    switch (type) {
+        case 'todo':
+            return <ListTodo className="h-4 w-4 text-blue-500" />;
+        case 'blocker':
+            return <AlertCircle className="h-4 w-4 text-red-500" />;
+        case 'done':
+            return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+    }
+};
+
+const getSectionTitle = (type: 'todo' | 'blocker' | 'done') => {
+    switch (type) {
+        case 'todo':
+            return 'To Do';
+        case 'blocker':
+            return 'Blockers';
+        case 'done':
+            return 'Completed';
+    }
+};
+
+const EmptyNoteSection = ({ type }: { type: 'todo' | 'blocker' | 'done' }) => {
+    const messages = {
+        todo: "No upcoming tasks",
+        blocker: "No blockers",
+        done: "No completed tasks"
+    };
+
+    return (
+        <div className="py-2 text-sm text-muted-foreground italic">
+            {messages[type]}
+        </div>
+    );
+};
+
 export function ParticipantNoteBoard({
     teamId,
     meetingId,
     currentUserId,
     userRole,
     participants,
-    onSave
+    onSave,
+    onSaveStatusChange
 }: ParticipantNoteBoardProps) {
     const { toast } = useToast();
     const [notes, setNotes] = useState<Record<string, { todo: NoteRow[]; blocker: NoteRow[]; done: NoteRow[]; }>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const notesRef = useRef(notes);
 
     // Add state for modals
@@ -96,12 +135,20 @@ export function ParticipantNoteBoard({
     } | null>(null);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
-    // Keep notesRef in sync with notes state
+    // Add lastSaved state
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+    // Keep notesRef in sync with notes state ? NOT SURE
     useEffect(() => {
         notesRef.current = notes;
     }, [notes]);
 
-    // Create a debounced save function
+    // Update save status when isSaving changes
+    useEffect(() => {
+        onSaveStatusChange(isSaving, lastSaved);
+    }, [isSaving, lastSaved, onSaveStatusChange]);
+
+    // Create a debounced save function (save notes after 1s of inactivity)
     const debouncedSave = useRef(
         debounce(async () => {
             if (isSaving) return;
@@ -136,6 +183,7 @@ export function ParticipantNoteBoard({
                         await meetingApi.updateNotes(teamId, meetingId, Number(participantId), blocks);
                     }
                 }
+                setLastSaved(new Date());
             } catch {
                 toast({
                     title: "Error",
@@ -145,15 +193,14 @@ export function ParticipantNoteBoard({
             } finally {
                 setIsSaving(false);
             }
-        }, 2000)
+        }, 1000)
     ).current;
 
-    // Remove the old auto-save effect
-    useEffect(() => {
-        return () => {
-            debouncedSave.cancel();
-        };
-    }, [debouncedSave]);
+    // useEffect(() => {
+    //     return () => {
+    //         debouncedSave.cancel();
+    //     };
+    // }, [debouncedSave]);
 
     const loadParticipantNotes = async () => {
         try {
@@ -207,11 +254,21 @@ export function ParticipantNoteBoard({
         }
     };
 
-    // Initial data fetch
+    // Modified initial data fetch
     useEffect(() => {
-        loadParticipantNotes();
-        loadTeamTasks();
+        setIsLoading(true);
+        Promise.all([
+            loadParticipantNotes(),
+            loadTeamTasks()
+        ]).finally(() => {
+            setIsLoading(false);
+        });
     }, [teamId, meetingId, participants]);
+
+    // Don't render anything while loading
+    if (isLoading) {
+        return <div>Loading...</div>;
+    }
 
     const updateParticipantNote = (participantId: number, type: 'todo' | 'blocker' | 'done', index: number, content: string) => {
         if (!canEditNotes(participantId, userRole, currentUserId)) {
@@ -292,57 +349,6 @@ export function ParticipantNoteBoard({
         });
     };
 
-    const saveAllNotes = async () => {
-        if (isSaving) return;
-        setIsSaving(true);
-
-        try {
-            for (const [participantId, participantNotes] of Object.entries(notes)) {
-                const blocks: MeetingNoteBlock[] = [];
-
-                for (const type of ['todo', 'blocker', 'done'] as const) {
-                    participantNotes[type].forEach(note => {
-                        if (!note.content.trim()) return;
-
-                        blocks.push({
-                            id: note.id,
-                            type,
-                            content: {
-                                text: note.content,
-                                ...(note.taskId ? {
-                                    task: {
-                                        id: note.taskId
-                                    }
-                                } : {})
-                            },
-                            created_by: Number(participantId),
-                            created_at: new Date().toISOString()
-                        });
-                    });
-                }
-
-                if (blocks.length > 0) {
-                    await meetingApi.updateNotes(teamId, meetingId, Number(participantId), blocks);
-                }
-            }
-
-            toast({
-                title: "Success",
-                description: "Notes saved successfully"
-            });
-
-            onSave();
-        } catch {
-            toast({
-                title: "Error",
-                description: "Failed to save notes",
-                variant: "destructive"
-            });
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
     const handleMentionClick = (type: 'user' | 'task', id: string) => {
         if (type === 'user') {
             const user = participants.find(p => p.id === Number(id));
@@ -361,10 +367,28 @@ export function ParticipantNoteBoard({
         setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
     };
 
+    const handleTaskCreate = (newTask: Task) => {
+        // Add the new task to the tasks list
+        setTasks(prev => {
+            // Avoid duplicate tasks
+            const exists = prev.some(t => t.id === newTask.id);
+            if (!exists) {
+                return [...prev, newTask];
+            }
+            return prev;
+        });
+        // Call handleTaskUpdate to ensure consistent behavior
+        handleTaskUpdate(newTask);
+    };
+
     const renderNoteEditor = (note: NoteRow, participantId: string, type: 'todo' | 'blocker' | 'done', index: number) => {
+        // Only render if we have tasks loaded
+        if (!tasks.length) return null;
+
         return (
             <div key={note.id} className="relative w-full [&_.ProseMirror:focus]:ring-0 [&_.ProseMirror:focus]:border-none">
                 <NoteEditor
+                    key={`${note.id}-${tasks.length}`} // Add key to force re-render when tasks change
                     content={note.content}
                     onChange={(content: string) => updateParticipantNote(Number(participantId), type, index, content)}
                     onDelete={() => deleteParticipantNote(Number(participantId), type, index)}
@@ -385,6 +409,7 @@ export function ParticipantNoteBoard({
                         : 'Read-only'}
                     readOnly={!canEditNotes(Number(participantId), userRole, currentUserId)}
                     teamId={teamId}
+                    onTaskCreate={handleTaskCreate}
                 />
             </div>
         );
@@ -393,24 +418,37 @@ export function ParticipantNoteBoard({
     const renderNoteSection = (participant: typeof participants[0], type: 'todo' | 'blocker' | 'done') => {
         const participantNotes = notes[participant.id]?.[type] || [];
         return (
-            <div data-note-section={type} className="space-y-2">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium">
-                        {type === 'todo' ? 'To Do' : type === 'done' ? 'Done' : 'Blockers'}
-                    </h3>
-                    {canEditNotes(participant.id, userRole, currentUserId) && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => addParticipantNote(participant.id, type)}
-                        >
-                            <Edit className="h-4 w-4" />
-                        </Button>
-                    )}
+            <div data-note-section={type} className="space-y-3">
+                <div className="border-b pb-2">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            {getSectionIcon(type)}
+                            <h3 className="font-semibold text-base tracking-tight">
+                                {getSectionTitle(type)}
+                            </h3>
+                            <Badge variant="secondary" className="ml-2">
+                                {participantNotes.length}
+                            </Badge>
+                        </div>
+                        {canEditNotes(participant.id, userRole, currentUserId) && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => addParticipantNote(participant.id, type)}
+                                className="h-7 w-7 p-0"
+                            >
+                                <Edit className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
                 </div>
-                <div className="space-y-2">
-                    {participantNotes.map((note, index) =>
-                        renderNoteEditor(note, String(participant.id), type, index)
+                <div className="space-y-2 pl-6">
+                    {participantNotes.length > 0 ? (
+                        participantNotes.map((note, index) =>
+                            renderNoteEditor(note, String(participant.id), type, index)
+                        )
+                    ) : (
+                        <EmptyNoteSection type={type} />
                     )}
                 </div>
             </div>
@@ -435,24 +473,6 @@ export function ParticipantNoteBoard({
                                 </Badge>
                             )}
                         </div>
-                        {canEditNotes(participant.id, userRole, currentUserId) && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={saveAllNotes}
-                                disabled={isSaving}
-                                className="w-full"
-                            >
-                                {isSaving ? (
-                                    <>Saving...</>
-                                ) : (
-                                    <>
-                                        <Save className="h-4 w-4 mr-1" />
-                                        Save
-                                    </>
-                                )}
-                            </Button>
-                        )}
                     </div>
                 </div>
                 <div className="p-4 space-y-4">
@@ -465,10 +485,10 @@ export function ParticipantNoteBoard({
     );
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 relative">
             {participants.map(renderParticipantCard)}
 
-            {/* Add modals */}
+            {/* Modals */}
             {selectedUser && (
                 <UserDetailModal
                     open={!!selectedUser}

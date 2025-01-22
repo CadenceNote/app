@@ -21,6 +21,7 @@ import { ParticipantNoteBoard } from './ParticipantNoteBoard';
 import { useUser } from '@/hooks/useUser';
 import { teamApi } from '@/services/teamApi';
 import { Card } from '../ui/card';
+import { SaveStatus } from './SaveStatus';
 
 interface MeetingNotes {
     blocks: MeetingNoteBlock[];
@@ -75,6 +76,8 @@ export function DailyStandupPage({
     const [currentUser, setCurrentUser] = useState<{ id: number; role: TeamRole } | null>(null);
     const { toast } = useToast();
     const meetingRef = useRef<ExtendedMeeting | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
     // Keep meetingRef in sync with meeting state
     useEffect(() => {
@@ -143,19 +146,19 @@ export function DailyStandupPage({
     }, [teamId, meetingId, user, isUserLoading]);
 
     // Handle visibility change
-    useEffect(() => {
-        const handleVisibilityChange = () => {
+    // useEffect(() => {
+    //     const handleVisibilityChange = () => {
 
-            if (document.visibilityState === 'visible') {
-                fetchMeetingData();
-            }
-        };
+    //         if (document.visibilityState === 'visible') {
+    //             fetchMeetingData();
+    //         }
+    //     };
 
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-        };
-    }, [teamId, meetingId]);
+    //     document.addEventListener('visibilitychange', handleVisibilityChange);
+    //     return () => {
+    //         document.removeEventListener('visibilitychange', handleVisibilityChange);
+    //     };
+    // }, [teamId, meetingId]);
 
     const handleSave = useCallback(() => {
         fetchMeetingData();
@@ -182,6 +185,9 @@ export function DailyStandupPage({
                                         <Users className="h-4 w-4 mr-1" />
                                         {meeting.participants.length} participants
                                     </span>
+                                    <div className="border-l pl-4 ml-2">
+                                        <SaveStatus lastSaved={lastSaved} isSaving={isSaving} />
+                                    </div>
                                 </div>
                             </div>
                             <Button
@@ -250,6 +256,10 @@ export function DailyStandupPage({
                                     userRole={userRole}
                                     participants={meeting.participants}
                                     onSave={handleSave}
+                                    onSaveStatusChange={(saving: boolean, saved: Date | null) => {
+                                        setIsSaving(saving);
+                                        if (saved) setLastSaved(saved);
+                                    }}
                                 />
                             </div>
                         )}
