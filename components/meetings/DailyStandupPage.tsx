@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Users, Target, ListTodo, Clock, Info, ChevronRight } from 'lucide-react';
+import { Users, Target, ListTodo, Clock, Info, ChevronRight, Edit2, Check, Link2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { meetingApi } from '@/services/meetingApi';
 import { MeetingType, MeetingStatus, MeetingNoteBlock } from '@/lib/types/meeting';
@@ -23,6 +23,7 @@ import { teamApi } from '@/services/teamApi';
 import { Card } from '../ui/card';
 import { SaveStatus } from './SaveStatus';
 import Link from 'next/link';
+import { Textarea } from "@/components/ui/textarea";
 
 interface MeetingNotes {
     blocks: MeetingNoteBlock[];
@@ -46,6 +47,7 @@ interface MeetingAPIResponse {
     settings?: {
         goals: string[];
         agenda: string[];
+        resources?: string[];
     };
 }
 
@@ -83,6 +85,12 @@ export function DailyStandupPage({
     const [currentUser, setCurrentUser] = useState<{ id: number; role: TeamRole } | null>(null);
     const { toast } = useToast();
     const meetingRef = useRef<ExtendedMeeting | null>(null);
+    const [isEditingDescription, setIsEditingDescription] = useState(false);
+    const [editedDescription, setEditedDescription] = useState('');
+    const [isEditingResources, setIsEditingResources] = useState(false);
+    const [editedResources, setEditedResources] = useState('');
+    const [isEditingAgenda, setIsEditingAgenda] = useState(false);
+    const [editedAgenda, setEditedAgenda] = useState('');
 
     // Keep meetingRef in sync with meeting state
     useEffect(() => {
@@ -175,6 +183,129 @@ export function DailyStandupPage({
         onSaveStatusChange?.(saving, saved);
     }, [onSaveStatusChange]);
 
+    const handleDescriptionEdit = async () => {
+        if (isEditingDescription) {
+            try {
+                await meetingApi.updateMeeting(teamId, meetingId, {
+                    description: editedDescription
+                });
+                setMeeting(prev => prev ? {
+                    ...prev,
+                    description: editedDescription
+                } : null);
+                setIsEditingDescription(false);
+                toast({
+                    title: "Success",
+                    description: "Meeting description updated",
+                });
+            } catch (error) {
+                console.error('[MeetingNotes] Failed to update description:', error);
+                toast({
+                    title: "Error",
+                    description: "Failed to update description",
+                    variant: "destructive"
+                });
+            }
+        } else {
+            setEditedDescription(meeting?.description || '');
+            setIsEditingDescription(true);
+        }
+    };
+
+    const handleResourcesEdit = async () => {
+        if (isEditingResources) {
+            try {
+                // Split by newlines and filter out empty lines
+                const resourcesList = editedResources
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0);
+
+                const updatedSettings = {
+                    ...(meeting?.settings || {}),
+                    goals: meeting?.settings?.goals || [],
+                    agenda: meeting?.settings?.agenda || [],
+                    resources: resourcesList
+                };
+
+                await meetingApi.updateMeeting(teamId, meetingId, {
+                    settings: updatedSettings
+                });
+
+                setMeeting(prev => {
+                    if (!prev) return null;
+                    return {
+                        ...prev,
+                        settings: updatedSettings
+                    };
+                });
+
+                setIsEditingResources(false);
+                toast({
+                    title: "Success",
+                    description: "Meeting resources updated",
+                });
+            } catch (error) {
+                console.error('[MeetingNotes] Failed to update resources:', error);
+                toast({
+                    title: "Error",
+                    description: "Failed to update resources",
+                    variant: "destructive"
+                });
+            }
+        } else {
+            setEditedResources(meeting?.settings?.resources?.join('\n') || '');
+            setIsEditingResources(true);
+        }
+    };
+
+    const handleAgendaEdit = async () => {
+        if (isEditingAgenda) {
+            try {
+                // Split by newlines and filter out empty lines
+                const agendaList = editedAgenda
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0);
+
+                const updatedSettings = {
+                    ...(meeting?.settings || {}),
+                    goals: meeting?.settings?.goals || [],
+                    agenda: agendaList,
+                    resources: meeting?.settings?.resources || []
+                };
+
+                await meetingApi.updateMeeting(teamId, meetingId, {
+                    settings: updatedSettings
+                });
+
+                setMeeting(prev => {
+                    if (!prev) return null;
+                    return {
+                        ...prev,
+                        settings: updatedSettings
+                    };
+                });
+
+                setIsEditingAgenda(false);
+                toast({
+                    title: "Success",
+                    description: "Meeting agenda updated",
+                });
+            } catch (error) {
+                console.error('[MeetingNotes] Failed to update agenda:', error);
+                toast({
+                    title: "Error",
+                    description: "Failed to update agenda",
+                    variant: "destructive"
+                });
+            }
+        } else {
+            setEditedAgenda(meeting?.settings?.agenda?.join('\n') || '');
+            setIsEditingAgenda(true);
+        }
+    };
+
     if (!meeting || !currentUser || isUserLoading) return null;
 
     return (
@@ -184,25 +315,95 @@ export function DailyStandupPage({
             {/* Main Content - Keep max-width for content readability */}
             <div className="flex-1 w-full">
                 <div className="max-w-[2000px] mx-auto px-6 py-6">
-                    {/* Goals and Agenda Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                        {/* Meeting Goals */}
+                    {/* Goals, Agenda, and Description Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                        {/* Meeting Description */}
                         <Card className="bg-white">
                             <div className="p-6">
-                                <h3 className="text-sm font-medium flex items-center text-gray-900 mb-4">
-                                    <Target className="h-4 w-4 mr-2 text-blue-600" />
-                                    Meeting Goals
-                                </h3>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-sm font-medium flex items-center text-gray-900">
+                                        <Info className="h-4 w-4 mr-2 text-blue-600" />
+                                        Meeting Description
+                                    </h3>
+                                    {(userRole === 'meeting_manager' || userRole === 'admin') && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleDescriptionEdit}
+                                            className="h-8 px-2 text-gray-500 hover:text-gray-900"
+                                        >
+                                            {isEditingDescription ? (
+                                                <Check className="h-4 w-4" />
+                                            ) : (
+                                                <Edit2 className="h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    )}
+                                </div>
                                 <div className="space-y-3">
-                                    {meeting.settings?.goals?.length ? (
-                                        meeting.settings.goals.map((goal: string, index: number) => (
+                                    {isEditingDescription ? (
+                                        <Textarea
+                                            value={editedDescription}
+                                            onChange={(e) => setEditedDescription(e.target.value)}
+                                            placeholder="Add a description..."
+                                            className="min-h-[100px] text-sm"
+                                        />
+                                    ) : meeting?.description ? (
+                                        <p className="text-sm text-gray-600">{meeting.description}</p>
+                                    ) : (
+                                        <p className="text-sm text-gray-500 italic">No description available</p>
+                                    )}
+                                </div>
+                            </div>
+                        </Card>
+
+                        {/* Meeting Resources */}
+                        <Card className="bg-white">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-sm font-medium flex items-center text-gray-900">
+                                        <Link2 className="h-4 w-4 mr-2 text-blue-600" />
+                                        Resources & Links
+                                    </h3>
+                                    {(userRole === 'meeting_manager' || userRole === 'admin') && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleResourcesEdit}
+                                            className="h-8 px-2 text-gray-500 hover:text-gray-900"
+                                        >
+                                            {isEditingResources ? (
+                                                <Check className="h-4 w-4" />
+                                            ) : (
+                                                <Edit2 className="h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    )}
+                                </div>
+                                <div className="space-y-3">
+                                    {isEditingResources ? (
+                                        <Textarea
+                                            value={editedResources}
+                                            onChange={(e) => setEditedResources(e.target.value)}
+                                            placeholder="Add resources (one per line)..."
+                                            className="min-h-[100px] text-sm"
+                                        />
+                                    ) : meeting?.settings?.resources?.length ? (
+                                        meeting.settings.resources.map((resource: string, index: number) => (
                                             <p key={index} className="text-sm text-gray-600 flex items-start">
                                                 <span className="mr-2">•</span>
-                                                {goal}
+                                                <a 
+                                                    href={resource}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-600 hover:underline break-all"
+                                                >
+                                                    {resource}
+                                                </a>
                                             </p>
                                         ))
                                     ) : (
-                                        <p className="text-sm text-gray-500 italic">No goals set</p>
+                                        <p className="text-sm text-gray-500 italic">No resources added</p>
                                     )}
                                 </div>
                             </div>
@@ -211,12 +412,35 @@ export function DailyStandupPage({
                         {/* Meeting Agenda */}
                         <Card className="bg-white">
                             <div className="p-6">
-                                <h3 className="text-sm font-medium flex items-center text-gray-900 mb-4">
-                                    <ListTodo className="h-4 w-4 mr-2 text-blue-600" />
-                                    Meeting Agenda
-                                </h3>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-sm font-medium flex items-center text-gray-900">
+                                        <ListTodo className="h-4 w-4 mr-2 text-blue-600" />
+                                        Meeting Agenda
+                                    </h3>
+                                    {(userRole === 'meeting_manager' || userRole === 'admin') && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleAgendaEdit}
+                                            className="h-8 px-2 text-gray-500 hover:text-gray-900"
+                                        >
+                                            {isEditingAgenda ? (
+                                                <Check className="h-4 w-4" />
+                                            ) : (
+                                                <Edit2 className="h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    )}
+                                </div>
                                 <div className="space-y-3">
-                                    {meeting.settings?.agenda?.length ? (
+                                    {isEditingAgenda ? (
+                                        <Textarea
+                                            value={editedAgenda}
+                                            onChange={(e) => setEditedAgenda(e.target.value)}
+                                            placeholder="Add agenda items (one per line)..."
+                                            className="min-h-[100px] text-sm"
+                                        />
+                                    ) : meeting.settings?.agenda?.length ? (
                                         meeting.settings.agenda.map((item: string, index: number) => (
                                             <p key={index} className="text-sm text-gray-600 flex items-start">
                                                 <span className="mr-2 text-blue-600 font-medium">{index + 1}.</span>
