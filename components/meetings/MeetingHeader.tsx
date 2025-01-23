@@ -88,6 +88,9 @@ export function MeetingHeader({
                             {title && (
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
                                     <div className="h-4 w-px bg-gray-200 flex-shrink-0" />
+                                    <h1 className="text-[14px] leading-5 font-semibold text-gray-900 truncate">
+                                        {title}
+                                    </h1>
                                     {isEditingTitle ? (
                                         <div className="flex items-center gap-2 min-w-0 flex-1">
                                             <Input
