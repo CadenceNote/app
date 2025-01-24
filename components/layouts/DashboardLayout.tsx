@@ -8,16 +8,15 @@ import {
     Home,
     BarChart2,
     Layout,
-    GitPullRequest,
     Calendar,
-    Map,
-    Milestone,
-    GitBranch,
-    Settings,
-    ChevronLeft,
     Users,
     HelpCircle,
     MenuIcon,
+    ListTodo,
+    UserCircle,
+    PlusCircle,
+    Settings,
+    ChevronLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -68,47 +67,67 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
 
-    const sidebarItems = [
+    // Check if we're in a team context by looking for /dashboard/{number}
+    // This ensures personal routes like /dashboard/my-tasks don't trigger team context
+    const teamId = pathname.split('/').find((segment, index, array) =>
+        array[index - 1] === 'dashboard' && !isNaN(Number(segment))
+    );
+
+    const isTeamContext = Boolean(teamId);
+
+    const personalSidebarItems = [
         {
             icon: <Home className="h-4 w-4" />,
-            label: 'Home',
+            label: 'Overview',
             href: '/dashboard',
         },
         {
             icon: <Calendar className="h-4 w-4" />,
-            label: 'Daily Feed',
-            href: '/dashboard/daily',
+            label: 'My Meetings',
+            href: '/dashboard/my-meetings',
         },
+        {
+            icon: <ListTodo className="h-4 w-4" />,
+            label: 'My Tasks',
+            href: '/dashboard/my-tasks',
+        },
+        {
+            icon: <BarChart2 className="h-4 w-4" />,
+            label: 'My Reports',
+            href: '/dashboard/my-reports',
+        },
+        {
+            icon: <UserCircle className="h-4 w-4" />,
+            label: 'My Teams',
+            href: '/dashboard/my-teams',
+        },
+    ];
+
+    const teamSidebarItems = [
         {
             icon: <Layout className="h-4 w-4" />,
-            label: 'Board',
-            href: '/dashboard/board',
+            label: 'Team Overview',
+            href: `/dashboard/${teamId}`,
         },
         {
-            icon: <GitPullRequest className="h-4 w-4" />,
-            label: 'Epics',
-            href: '/dashboard/epics',
+            icon: <Calendar className="h-4 w-4" />,
+            label: 'Meetings',
+            href: `/dashboard/${teamId}/meetings`,
+        },
+        {
+            icon: <ListTodo className="h-4 w-4" />,
+            label: 'Tasks',
+            href: `/dashboard/${teamId}/tasks`,
         },
         {
             icon: <BarChart2 className="h-4 w-4" />,
             label: 'Reports',
-            href: '/dashboard/reports',
-            hasSubItems: true,
+            href: `/dashboard/${teamId}/reports`,
         },
         {
-            icon: <Map className="h-4 w-4" />,
-            label: 'Roadmap',
-            href: '/dashboard/roadmap',
-        },
-        {
-            icon: <Milestone className="h-4 w-4" />,
-            label: 'Milestones',
-            href: '/dashboard/milestones',
-        },
-        {
-            icon: <GitBranch className="h-4 w-4" />,
-            label: 'Workflows',
-            href: '/dashboard/workflows',
+            icon: <Users className="h-4 w-4" />,
+            label: 'Members',
+            href: `/dashboard/${teamId}/members`,
         },
     ];
 
@@ -119,58 +138,90 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 "bg-white border-r flex flex-col transition-all duration-300",
                 isCollapsed ? "w-[60px]" : "w-[240px]"
             )}>
-                {/* Project Header */}
-                <div className="p-4 border-b flex items-center gap-2">
-                    {!isCollapsed && (
-                        <div className="text-m,d truncate">My workspace</div>
-                    )}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="ml-auto"
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                    >
-                        <MenuIcon className="h-4 w-4" />
-                    </Button>
+                {/* Header */}
+                <div className="border-b">
+
+                    <div className="p-4 flex items-center gap-2">
+                        {!isCollapsed && (
+                            <div className="text-md font-medium truncate">
+                                {isTeamContext ? 'Team Dashboard' : 'My Dashboard'}
+                            </div>
+                        )}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="ml-auto"
+                            onClick={() => setIsCollapsed(!isCollapsed)}
+                        >
+                            <MenuIcon className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Main Navigation */}
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                    <Button
-                        variant="outline"
-                        className={cn(
-                            "w-full justify-start gap-2 mb-2",
-                            isCollapsed && "justify-center"
-                        )}
-                    >
-                        <Users className="h-4 w-4" />
-                        {!isCollapsed && "Invite team members"}
-                    </Button>
-
-                    {sidebarItems.map((item) => (
-                        <SidebarItem
-                            key={item.href}
-                            {...item}
-                            isCollapsed={isCollapsed}
-                            isActive={pathname === item.href}
-                        />
-                    ))}
+                    {isTeamContext ? (
+                        // Team context
+                        <>
+                            {teamSidebarItems.map((item) => (
+                                <SidebarItem
+                                    key={item.href}
+                                    {...item}
+                                    isCollapsed={isCollapsed}
+                                    isActive={pathname === item.href}
+                                />
+                            ))}
+                        </>
+                    ) : (
+                        // Personal context
+                        <>
+                            <Button
+                                variant="outline"
+                                className={cn(
+                                    "w-full justify-start gap-2 mb-2",
+                                    isCollapsed && "justify-center"
+                                )}
+                            >
+                                <PlusCircle className="h-4 w-4" />
+                                {!isCollapsed && "Join Team"}
+                            </Button>
+                            {personalSidebarItems.map((item) => (
+                                <SidebarItem
+                                    key={item.href}
+                                    {...item}
+                                    isCollapsed={isCollapsed}
+                                    isActive={pathname === item.href}
+                                />
+                            ))}
+                        </>
+                    )}
                 </div>
 
                 {/* Bottom Section */}
                 <div className="p-2 border-t space-y-1">
+                    {isTeamContext && (
+                        <SidebarItem
+                            icon={<UserCircle className="h-4 w-4" />}
+                            label="My Dashboard"
+                            href="/dashboard"
+                            isCollapsed={isCollapsed}
+                        />
+                    )}
                     <SidebarItem
                         icon={<Settings className="h-4 w-4" />}
                         label="Settings"
-                        href="/dashboard/settings"
+                        href={isTeamContext ? `/dashboard/${teamId}/settings` : "/dashboard/settings"}
                         isCollapsed={isCollapsed}
                     />
-                    <SidebarItem
-                        icon={<Users className="h-4 w-4" />}
-                        label="Profile"
-                        href="/dashboard/profile"
-                        isCollapsed={isCollapsed}
-                    />
+
+                    {!isTeamContext && (
+                        <SidebarItem
+                            icon={<UserCircle className="h-4 w-4" />}
+                            label="Profile"
+                            href="/dashboard/profile"
+                            isCollapsed={isCollapsed}
+                        />
+                    )}
                     <SidebarItem
                         icon={<HelpCircle className="h-4 w-4" />}
                         label="Help center"
