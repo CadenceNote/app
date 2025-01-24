@@ -80,4 +80,9 @@ export interface Meeting {
     participants: Participant[];
     notes: Record<string, MeetingNotes>;
     summary?: string;
+    settings?: {
+        goals: string[];
+        agenda: string[];
+        resources?: string[];
+    };
 }

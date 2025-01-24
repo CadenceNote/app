@@ -57,7 +57,12 @@ interface UserSearchResponse {
 export const meetingApi = {
     // Get a specific meeting
     getMeeting: async (teamId: number, meetingId: number): Promise<Meeting> => {
-        const response = await api.get(`/teams/${teamId}/meetings/${meetingId}/`);
+        const response = await api.get(`/teams/${teamId}/meetings/${meetingId}`);
+        return response.data;
+    },
+
+    updateMeeting: async (teamId: number, meetingId: number, data: Partial<Meeting>): Promise<Meeting> => {
+        const response = await api.put(`/teams/${teamId}/meetings/${meetingId}/update/`, data);
         return response.data;
     },
 

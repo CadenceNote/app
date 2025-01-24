@@ -1,17 +1,17 @@
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronRight, Users, Clock, Calendar } from 'lucide-react';
+import { Plus, ChevronRight, Users, Clock, Calendar, Check, X } from 'lucide-react';
 import Link from 'next/link';
 import { SaveStatus } from './SaveStatus';
 import { MeetingParticipantsModal } from './MeetingParticipantsModal';
 import { useState } from 'react';
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 interface MeetingHeaderProps {
     teamId: string;
     meetingId: string;
     onCreateMeeting: () => void;
     title?: string;
-    description?: string;
     durationMinutes?: number;
     participantCount?: number;
     lastSaved?: Date | null;
@@ -22,6 +22,8 @@ interface MeetingHeaderProps {
         full_name: string;
         role?: string;
     }>;
+    onTitleChange?: (newTitle: string) => void;
+    canEdit?: boolean;
 }
 
 export function MeetingHeader({
@@ -29,14 +31,37 @@ export function MeetingHeader({
     meetingId,
     onCreateMeeting,
     title,
-    description,
     durationMinutes,
     participantCount,
     lastSaved,
     isSaving,
-    participants = []
+    participants = [],
+    onTitleChange,
+    canEdit
 }: MeetingHeaderProps) {
     const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [editedTitle, setEditedTitle] = useState(title || '');
+
+    const handleTitleSubmit = () => {
+        if (onTitleChange && editedTitle.trim() !== '') {
+            onTitleChange(editedTitle.trim());
+        }
+        setIsEditingTitle(false);
+    };
+
+    const handleTitleCancel = () => {
+        setEditedTitle(title || '');
+        setIsEditingTitle(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleTitleSubmit();
+        } else if (e.key === 'Escape') {
+            handleTitleCancel();
+        }
+    };
 
     return (
         <>
@@ -59,23 +84,62 @@ export function MeetingHeader({
                                 </span>
                             </nav>
 
-                            {/* Title and Description */}
+                            {/* Title */}
                             {title && (
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
                                     <div className="h-4 w-px bg-gray-200 flex-shrink-0" />
-                                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                                        <h1 className="text-[14px] leading-5 font-semibold text-gray-900 truncate">
-                                            {title}
-                                        </h1>
-                                        {description && (
-                                            <>
-                                                <div className="h-4 w-px bg-gray-200 flex-shrink-0" />
-                                                <p className="text-[13px] leading-5 text-gray-500 truncate flex-1">
-                                                    {description}
-                                                </p>
-                                            </>
-                                        )}
-                                    </div>
+                                    <h1 className="text-[14px] leading-5 font-semibold text-gray-900 truncate">
+                                        {title}
+                                    </h1>
+                                    {isEditingTitle ? (
+                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <Input
+                                                value={editedTitle}
+                                                onChange={(e) => setEditedTitle(e.target.value)}
+                                                onKeyDown={handleKeyDown}
+                                                className="h-7 text-[14px] font-semibold min-w-0"
+                                                autoFocus
+                                            />
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleTitleSubmit}
+                                                    className={cn(
+                                                        "h-7 w-7 p-0",
+                                                        "text-gray-600 hover:text-gray-900",
+                                                        "hover:bg-gray-100/80 active:bg-gray-200/80"
+                                                    )}
+                                                >
+                                                    <Check className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleTitleCancel}
+                                                    className={cn(
+                                                        "h-7 w-7 p-0",
+                                                        "text-gray-600 hover:text-gray-900",
+                                                        "hover:bg-gray-100/80 active:bg-gray-200/80"
+                                                    )}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <h1 
+                                                className={cn(
+                                                    "text-[14px] leading-5 font-semibold text-gray-900 truncate",
+                                                    canEdit && "cursor-pointer hover:text-gray-700"
+                                                )}
+                                                onClick={() => canEdit && setIsEditingTitle(true)}
+                                            >
+                                                {title}
+                                            </h1>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
