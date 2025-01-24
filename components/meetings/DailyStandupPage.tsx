@@ -9,7 +9,7 @@
  */
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { ListTodo, Info, Edit2, Check, Link2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -18,13 +18,9 @@ import { MeetingType, MeetingStatus, MeetingNoteBlock } from '@/lib/types/meetin
 import { MeetingParticipantsModal } from './MeetingParticipantsModal';
 import { TeamRole } from '@/lib/types/team';
 import { ParticipantNoteBoard } from './ParticipantNoteBoard';
-import { useUser } from '@/hooks/useUser';
-import { teamApi } from '@/services/teamApi';
 import { Card } from '../ui/card';
 import { MeetingHeader } from './MeetingHeader';
 import { Textarea } from "@/components/ui/textarea";
-import { SaveStatus } from './SaveStatus';
-import Link from 'next/link';
 
 interface MeetingNotes {
     blocks: MeetingNoteBlock[];
@@ -42,6 +38,7 @@ interface MeetingAPIResponse {
         id: number;
         email: string;
         full_name: string;
+        role?: TeamRole;
     }[];
     notes: Record<string, MeetingNotes>;
     summary?: string;
@@ -52,13 +49,19 @@ interface MeetingAPIResponse {
     };
 }
 
-interface ExtendedMeeting extends Omit<MeetingAPIResponse, 'participants'> {
-    participants: {
-        id: number;
-        email: string;
-        full_name: string;
+interface TeamData {
+    id: number;
+    name: string;
+    members: Array<{
+        user_id: number;
         role: TeamRole;
-    }[];
+    }>;
+}
+
+interface Task {
+    id: number;
+    title: string;
+    team_ref_number: string;
 }
 
 interface DailyStandupPageProps {
@@ -68,6 +71,10 @@ interface DailyStandupPageProps {
     userRole: TeamRole;
     hideHeader?: boolean;
     onSaveStatusChange?: (saving: boolean, saved: Date | null) => void;
+    meeting: MeetingAPIResponse;
+    teamData: TeamData;
+    tasks: Task[];
+    onUpdate: () => void;
 }
 
 export function DailyStandupPage({
@@ -76,103 +83,23 @@ export function DailyStandupPage({
     currentUserId,
     userRole,
     hideHeader,
-    onSaveStatusChange
+    onSaveStatusChange,
+    meeting: initialMeeting,
+    teamData,
+    tasks,
+    onUpdate
 }: DailyStandupPageProps) {
-    const [meeting, setMeeting] = useState<ExtendedMeeting | null>(null);
+    const [meeting, setMeeting] = useState<MeetingAPIResponse>(initialMeeting);
     const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [isSaving, setIsSaving] = useState(false);
-    const { user, isLoading: isUserLoading } = useUser();
-    const [currentUser, setCurrentUser] = useState<{ id: number; role: TeamRole } | null>(null);
     const { toast } = useToast();
-    const meetingRef = useRef<ExtendedMeeting | null>(null);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
-    const [editedDescription, setEditedDescription] = useState('');
+    const [editedDescription, setEditedDescription] = useState(meeting.description || '');
     const [isEditingResources, setIsEditingResources] = useState(false);
-    const [editedResources, setEditedResources] = useState('');
+    const [editedResources, setEditedResources] = useState(meeting.settings?.resources?.join('\n') || '');
     const [isEditingAgenda, setIsEditingAgenda] = useState(false);
-    const [editedAgenda, setEditedAgenda] = useState('');
-
-    // Keep meetingRef in sync with meeting state
-    useEffect(() => {
-        meetingRef.current = meeting;
-    }, [meeting]);
-
-    const fetchMeetingData = async () => {
-        try {
-            const data = await meetingApi.getMeeting(teamId, meetingId) as MeetingAPIResponse;
-
-            // Get team member roles for each participant
-            const teamData = await teamApi.getTeam(teamId);
-            const memberRoles = new Map(teamData.members?.map(m => [m.user_id, m.role as TeamRole]));
-
-            const transformedData: ExtendedMeeting = {
-                ...data,
-                participants: data.participants.map(p => ({
-                    id: p.id,
-                    email: p.email,
-                    full_name: p.full_name,
-                    role: memberRoles.get(p.id) || 'member'
-                }))
-            };
-
-            // Only update if data has changed
-            const meetingChanged = JSON.stringify(meetingRef.current) !== JSON.stringify(transformedData);
-
-
-            if (meetingChanged) {
-                setMeeting(transformedData);
-            }
-        } catch (error) {
-            console.error('[MeetingNotes] Failed to fetch meeting data:', error);
-            toast({
-                title: "Error",
-                description: "Failed to load meeting data",
-                variant: "destructive"
-            });
-        }
-    };
-
-    useEffect(() => {
-        const loadData = async () => {
-            if (!user) return;
-            try {
-                // Get user's role in the team - this should be cached
-                const teamData = await meetingApi.getTeamRole(teamId);
-                setCurrentUser({
-                    id: user.id,
-                    role: teamData.role
-                });
-            } catch (error) {
-                console.error('[MeetingNotes] Failed to fetch user data:', error);
-                toast({
-                    title: "Error",
-                    description: "Failed to load user data",
-                    variant: "destructive"
-                });
-            }
-        };
-
-        if (!isUserLoading) {
-            loadData();
-            fetchMeetingData();
-        }
-    }, [teamId, meetingId, user, isUserLoading]);
-
-    // Handle visibility change
-    // useEffect(() => {
-    //     const handleVisibilityChange = () => {
-
-    //         if (document.visibilityState === 'visible') {
-    //             fetchMeetingData();
-    //         }
-    //     };
-
-    //     document.addEventListener('visibilitychange', handleVisibilityChange);
-    //     return () => {
-    //         document.removeEventListener('visibilitychange', handleVisibilityChange);
-    //     };
-    // }, [teamId, meetingId]);
+    const [editedAgenda, setEditedAgenda] = useState(meeting.settings?.agenda?.join('\n') || '');
 
     const handleSaveStatusChange = useCallback((saving: boolean, saved: Date | null) => {
         setIsSaving(saving);
@@ -186,15 +113,16 @@ export function DailyStandupPage({
                 await meetingApi.updateMeeting(teamId, meetingId, {
                     description: editedDescription
                 });
-                setMeeting(prev => prev ? {
+                setMeeting(prev => ({
                     ...prev,
                     description: editedDescription
-                } : null);
+                }));
                 setIsEditingDescription(false);
                 toast({
                     title: "Success",
                     description: "Meeting description updated",
                 });
+                onUpdate();
             } catch (error) {
                 console.error('[MeetingNotes] Failed to update description:', error);
                 toast({
@@ -204,7 +132,7 @@ export function DailyStandupPage({
                 });
             }
         } else {
-            setEditedDescription(meeting?.description || '');
+            setEditedDescription(meeting.description || '');
             setIsEditingDescription(true);
         }
     };
@@ -219,9 +147,9 @@ export function DailyStandupPage({
                     .filter(line => line.length > 0);
 
                 const updatedSettings = {
-                    ...(meeting?.settings || {}),
-                    goals: meeting?.settings?.goals || [],
-                    agenda: meeting?.settings?.agenda || [],
+                    ...(meeting.settings || {}),
+                    goals: meeting.settings?.goals || [],
+                    agenda: meeting.settings?.agenda || [],
                     resources: resourcesList
                 };
 
@@ -229,19 +157,17 @@ export function DailyStandupPage({
                     settings: updatedSettings
                 });
 
-                setMeeting(prev => {
-                    if (!prev) return null;
-                    return {
-                        ...prev,
-                        settings: updatedSettings
-                    };
-                });
+                setMeeting(prev => ({
+                    ...prev,
+                    settings: updatedSettings
+                }));
 
                 setIsEditingResources(false);
                 toast({
                     title: "Success",
                     description: "Meeting resources updated",
                 });
+                onUpdate();
             } catch (error) {
                 console.error('[MeetingNotes] Failed to update resources:', error);
                 toast({
@@ -251,7 +177,7 @@ export function DailyStandupPage({
                 });
             }
         } else {
-            setEditedResources(meeting?.settings?.resources?.join('\n') || '');
+            setEditedResources(meeting.settings?.resources?.join('\n') || '');
             setIsEditingResources(true);
         }
     };
@@ -266,29 +192,27 @@ export function DailyStandupPage({
                     .filter(line => line.length > 0);
 
                 const updatedSettings = {
-                    ...(meeting?.settings || {}),
-                    goals: meeting?.settings?.goals || [],
+                    ...(meeting.settings || {}),
+                    goals: meeting.settings?.goals || [],
                     agenda: agendaList,
-                    resources: meeting?.settings?.resources || []
+                    resources: meeting.settings?.resources || []
                 };
 
                 await meetingApi.updateMeeting(teamId, meetingId, {
                     settings: updatedSettings
                 });
 
-                setMeeting(prev => {
-                    if (!prev) return null;
-                    return {
-                        ...prev,
-                        settings: updatedSettings
-                    };
-                });
+                setMeeting(prev => ({
+                    ...prev,
+                    settings: updatedSettings
+                }));
 
                 setIsEditingAgenda(false);
                 toast({
                     title: "Success",
                     description: "Meeting agenda updated",
                 });
+                onUpdate();
             } catch (error) {
                 console.error('[MeetingNotes] Failed to update agenda:', error);
                 toast({
@@ -298,41 +222,17 @@ export function DailyStandupPage({
                 });
             }
         } else {
-            setEditedAgenda(meeting?.settings?.agenda?.join('\n') || '');
+            setEditedAgenda(meeting.settings?.agenda?.join('\n') || '');
             setIsEditingAgenda(true);
         }
     };
-
-    const handleTitleChange = async (newTitle: string) => {
-        try {
-            await meetingApi.updateMeeting(teamId, meetingId, {
-                title: newTitle
-            });
-            setMeeting(prev => prev ? {
-                ...prev,
-                title: newTitle
-            } : null);
-            toast({
-                title: "Success",
-                description: "Meeting title updated",
-            });
-        } catch (error) {
-            console.error('[MeetingNotes] Failed to update title:', error);
-            toast({
-                title: "Error",
-                description: "Failed to update title",
-                variant: "destructive"
-            });
-        }
-    };
-
-    if (!meeting || !currentUser || isUserLoading) return null;
 
     return (
         <div className="min-h-screen flex flex-col bg-[#F9FAFB]">
             {!hideHeader && (
                 <MeetingHeader
                     teamId={String(teamId)}
+                    teamName={teamData.name}
                     meetingId={String(meetingId)}
                     title={meeting.title}
                     durationMinutes={meeting.duration_minutes}
@@ -341,8 +241,8 @@ export function DailyStandupPage({
                     isSaving={isSaving}
                     participants={meeting.participants}
                     onCreateMeeting={() => {/* handle create meeting */ }}
-                    onTitleChange={handleTitleChange}
                     canEdit={userRole === 'admin' || userRole === 'meeting_manager'}
+                    onUpdate={onUpdate}
                 />
             )}
 
@@ -499,6 +399,8 @@ export function DailyStandupPage({
                                 userRole={userRole}
                                 participants={meeting.participants}
                                 onSaveStatusChange={handleSaveStatusChange}
+                                tasks={tasks}
+                                notes={meeting.notes}
                             />
                         </div>
                     )}
@@ -536,7 +438,7 @@ export function DailyStandupPage({
                 teamId={teamId}
                 meetingId={meetingId}
                 currentParticipants={meeting.participants}
-                onParticipantsUpdate={fetchMeetingData}
+                onParticipantsUpdate={onUpdate}
             />
         </div>
     );

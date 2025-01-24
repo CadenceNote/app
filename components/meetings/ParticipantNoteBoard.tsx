@@ -25,7 +25,6 @@ import { CheckCircle2, AlertCircle, ListTodo, Plus } from 'lucide-react';
 import { NoteEditor } from '@/components/meetings/NoteEditor';
 import { NoteRow } from '@/lib/types/note';
 import { MeetingNoteBlock } from '@/lib/types/meeting';
-import { taskApi } from '@/services/taskApi';
 import { Task } from '@/lib/types/task';
 import { debounce } from '@/lib/utils';
 import { UserDetailModal } from './UserDetailModal';
@@ -62,6 +61,21 @@ interface ParticipantNoteBoardProps {
         role?: TeamRole;
     }[];
     onSaveStatusChange: (isSaving: boolean, lastSaved: Date | null) => void;
+    tasks: Task[];
+    notes: Record<string, {
+        blocks: Array<{
+            id: string;
+            type: 'todo' | 'blocker' | 'done';
+            content: {
+                text: string;
+                task?: {
+                    id: number;
+                };
+            };
+            created_by: number;
+            created_at: string;
+        }>;
+    }>;
 }
 
 // Helper function to check if a user can edit notes
@@ -116,24 +130,21 @@ export function ParticipantNoteBoard({
     currentUserId,
     userRole,
     participants,
-    onSaveStatusChange
+    onSaveStatusChange,
+    tasks,
+    notes: initialNotes
 }: ParticipantNoteBoardProps) {
     const { toast } = useToast();
     const [notes, setNotes] = useState<Record<string, { todo: NoteRow[]; blocker: NoteRow[]; done: NoteRow[]; }>>({});
     const [isSaving, setIsSaving] = useState(false);
-    const [tasks, setTasks] = useState<Task[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const notesRef = useRef(notes);
-
-    // Add state for modals
     const [selectedUser, setSelectedUser] = useState<{
         id: number;
         email: string;
         full_name: string;
     } | null>(null);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-
-    // Add lastSaved state
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
     // Keep notesRef in sync with notes state
@@ -145,6 +156,35 @@ export function ParticipantNoteBoard({
     useEffect(() => {
         onSaveStatusChange(isSaving, lastSaved);
     }, [isSaving, lastSaved, onSaveStatusChange]);
+
+    // Initialize notes from props
+    useEffect(() => {
+        const participantNotes: Record<string, { todo: NoteRow[]; blocker: NoteRow[]; done: NoteRow[]; }> = {};
+
+        participants.forEach(participant => {
+            const userNotes = initialNotes[participant.id.toString()]?.blocks || [];
+            participantNotes[participant.id.toString()] = {
+                todo: [],
+                blocker: [],
+                done: []
+            };
+
+            userNotes.forEach((block) => {
+                if (participantNotes[participant.id.toString()][block.type]) {
+                    participantNotes[participant.id.toString()][block.type].push({
+                        id: block.id,
+                        type: block.type,
+                        content: block.content.text || '',
+                        taskId: block.content.task?.id,
+                        badges: []
+                    });
+                }
+            });
+        });
+
+        setNotes(participantNotes);
+        setIsLoading(false);
+    }, [participants, initialNotes]);
 
     // Create a debounced save function (save notes after 500ms of inactivity)
     const debouncedSave = useRef(
@@ -199,80 +239,6 @@ export function ParticipantNoteBoard({
             debouncedSave.cancel();
         };
     }, [debouncedSave]);
-
-    const loadParticipantNotes = async () => {
-        try {
-            const data = await meetingApi.getMeeting(teamId, meetingId);
-            const participantNotes: Record<string, { todo: NoteRow[]; blocker: NoteRow[]; done: NoteRow[]; }> = {};
-
-            participants.forEach(participant => {
-                const userNotes = data.notes[participant.id.toString()]?.blocks || [];
-                participantNotes[participant.id.toString()] = {
-                    todo: [],
-                    blocker: [],
-                    done: []
-                };
-
-                userNotes.forEach((block: MeetingNoteBlock) => {
-                    if (participantNotes[participant.id.toString()][block.type]) {
-                        participantNotes[participant.id.toString()][block.type].push({
-                            id: block.id,
-                            type: block.type,
-                            content: block.content.text || '',
-                            taskId: block.content.task?.id,
-                            badges: []
-                        });
-                    }
-                });
-            });
-
-            const notesChanged = JSON.stringify(notesRef.current) !== JSON.stringify(participantNotes);
-            if (notesChanged) {
-                setNotes(participantNotes);
-            }
-        } catch {
-            toast({
-                title: "Error",
-                description: "Failed to load meeting notes",
-                variant: "destructive"
-            });
-        }
-    };
-
-    const loadTeamTasks = async () => {
-        try {
-            const taskList = await taskApi.listTasks(teamId);
-            setTasks(taskList);
-        } catch {
-            toast({
-                title: "Error",
-                description: "Failed to load tasks",
-                variant: "destructive"
-            });
-        }
-    };
-
-    // Modified initial data fetch to prevent flashing
-    useEffect(() => {
-        const loadData = async () => {
-            setIsLoading(true);
-            try {
-                await Promise.all([
-                    loadParticipantNotes(),
-                    loadTeamTasks()
-                ]);
-            } catch {
-                toast({
-                    title: "Error",
-                    description: "Failed to load data",
-                    variant: "destructive"
-                });
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        loadData();
-    }, [teamId, meetingId, participants]);
 
     const updateParticipantNote = (participantId: number, type: 'todo' | 'blocker' | 'done', index: number, content: string) => {
         if (!canEditNotes(participantId, userRole, currentUserId)) {
@@ -363,22 +329,12 @@ export function ParticipantNoteBoard({
         }
     };
 
-    const handleTaskUpdate = (updatedTask: Task) => {
-        setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+    const handleTaskUpdate = () => {
+        // No need to update tasks state as it's managed by parent
     };
 
-    const handleTaskCreate = (newTask: Task) => {
-        // Add the new task to the tasks list
-        setTasks(prev => {
-            // Avoid duplicate tasks
-            const exists = prev.some(t => t.id === newTask.id);
-            if (!exists) {
-                return [...prev, newTask];
-            }
-            return prev;
-        });
-        // Call handleTaskUpdate to ensure consistent behavior
-        handleTaskUpdate(newTask);
+    const handleTaskCreate = () => {
+        // No need to update tasks state as it's managed by parent
     };
 
     const renderNoteEditor = (note: NoteRow, participantId: string, type: 'todo' | 'blocker' | 'done', index: number) => {
@@ -394,9 +350,6 @@ export function ParticipantNoteBoard({
                         if (note.content.trim()) {
                             addParticipantNote(Number(participantId), type);
                         }
-                    }}
-                    onMention={() => {
-                        // Handle mentions if needed
                     }}
                     onMentionClick={handleMentionClick}
                     participants={participants}
