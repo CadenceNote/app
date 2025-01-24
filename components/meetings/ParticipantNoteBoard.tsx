@@ -122,6 +122,7 @@ export function ParticipantNoteBoard({
     const [notes, setNotes] = useState<Record<string, { todo: NoteRow[]; blocker: NoteRow[]; done: NoteRow[]; }>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const notesRef = useRef(notes);
 
     // Add state for modals
@@ -135,7 +136,7 @@ export function ParticipantNoteBoard({
     // Add lastSaved state
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-    // Keep notesRef in sync with notes state ? NOT SURE
+    // Keep notesRef in sync with notes state
     useEffect(() => {
         notesRef.current = notes;
     }, [notes]);
@@ -145,7 +146,7 @@ export function ParticipantNoteBoard({
         onSaveStatusChange(isSaving, lastSaved);
     }, [isSaving, lastSaved, onSaveStatusChange]);
 
-    // Create a debounced save function (save notes after 1s of inactivity)
+    // Create a debounced save function (save notes after 500ms of inactivity)
     const debouncedSave = useRef(
         debounce(async () => {
             if (isSaving) return;
@@ -193,11 +194,11 @@ export function ParticipantNoteBoard({
         }, 500)
     ).current;
 
-    // useEffect(() => {
-    //     return () => {
-    //         debouncedSave.cancel();
-    //     };
-    // }, [debouncedSave]);
+    useEffect(() => {
+        return () => {
+            debouncedSave.cancel();
+        };
+    }, [debouncedSave]);
 
     const loadParticipantNotes = async () => {
         try {
@@ -251,9 +252,10 @@ export function ParticipantNoteBoard({
         }
     };
 
-    // Modified initial data fetch to notify parent when ready
+    // Modified initial data fetch to prevent flashing
     useEffect(() => {
         const loadData = async () => {
+            setIsLoading(true);
             try {
                 await Promise.all([
                     loadParticipantNotes(),
@@ -265,6 +267,8 @@ export function ParticipantNoteBoard({
                     description: "Failed to load data",
                     variant: "destructive"
                 });
+            } finally {
+                setIsLoading(false);
             }
         };
         loadData();
@@ -338,12 +342,10 @@ export function ParticipantNoteBoard({
 
         // Use requestAnimationFrame to ensure the DOM has updated
         requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                const editor = document.querySelector(`[data-note-id="${newNoteId}"] .ProseMirror`);
-                if (editor instanceof HTMLElement) {
-                    editor.focus();
-                }
-            });
+            const editor = document.querySelector(`[data-note-id="${newNoteId}"] .ProseMirror`);
+            if (editor instanceof HTMLElement) {
+                editor.focus();
+            }
         });
     };
 
@@ -380,13 +382,10 @@ export function ParticipantNoteBoard({
     };
 
     const renderNoteEditor = (note: NoteRow, participantId: string, type: 'todo' | 'blocker' | 'done', index: number) => {
-        // Only render if we have tasks loaded
-        if (!tasks.length) return null;
-
         return (
             <div key={note.id} data-note-id={note.id} className="relative w-full [&_.ProseMirror:focus]:ring-0 [&_.ProseMirror:focus]:border-none">
                 <NoteEditor
-                    key={`${note.id}-${tasks.length}`} // Add key to force re-render when tasks change
+                    key={`${note.id}-${tasks.length}`}
                     content={note.content}
                     onChange={(content: string) => updateParticipantNote(Number(participantId), type, index, content)}
                     onDelete={() => deleteParticipantNote(Number(participantId), type, index)}
@@ -484,7 +483,7 @@ export function ParticipantNoteBoard({
 
     return (
         <div className="space-y-4 relative">
-            {participants.map(renderParticipantCard)}
+            {!isLoading && participants.map(renderParticipantCard)}
 
             {/* Modals */}
             {selectedUser && (

@@ -518,10 +518,9 @@ export function NoteEditor({
     const prevTasksRef = useRef(tasks);
     const [showTaskModal, setShowTaskModal] = useState(false);
     const [commandRange, setCommandRange] = useState<{ from: number; to: number } | null>(null);
-    const [editor, setEditor] = useState<ReturnType<typeof useEditor> | null>(null);
 
     // Create editor instance
-    const editorInstance = useEditor({
+    const editor = useEditor({
         extensions: [
             StarterKit.configure({
                 history: {},
@@ -690,7 +689,6 @@ export function NoteEditor({
                         // Sort tasks by id descending to show newest first
                         allTasks.sort((a, b) => b.id - a.id);
 
-                        console.log('Task mention suggestion - allTasks:', allTasks);
                         return allTasks
                             .filter(task =>
                                 `${task.team_ref_number} ${task.title}`.toLowerCase().includes(query.toLowerCase())
@@ -711,7 +709,6 @@ export function NoteEditor({
 
                         return {
                             onStart: (props) => {
-                                console.log('Task mention suggestion started', props);
                                 element = document.createElement('div');
                                 root = createRoot(element);
                                 selectedIndex = 0;
@@ -836,6 +833,7 @@ export function NoteEditor({
             const newContent = editor.getHTML();
             if (newContent !== contentRef.current) {
                 onChange(newContent);
+                contentRef.current = newContent;
             }
         },
         editable: !readOnly,
@@ -903,13 +901,30 @@ export function NoteEditor({
         enableInputRules: false,
         enablePasteRules: false,
         immediatelyRender: false,
-        autofocus: false
     });
 
-    // Keep contentRef in sync
+    // Update editor content when prop changes
     useEffect(() => {
-        contentRef.current = content;
-    }, [content]);
+        if (editor && content !== editor.getHTML()) {
+            editor.commands.setContent(content, false);
+            contentRef.current = content;
+        }
+    }, [content, editor]);
+
+    // Store editor reference
+    useEffect(() => {
+        editorRef.current = editor;
+        return () => {
+            editor?.destroy();
+        };
+    }, [editor]);
+
+    // Handle content updates without recreating editor
+    useEffect(() => {
+        if (editor && content !== editor.getHTML()) {
+            editor.commands.setContent(content, false);
+        }
+    }, [content, editor]);
 
     // Update task mentions when tasks change
     useEffect(() => {
@@ -949,26 +964,6 @@ export function NoteEditor({
         prevTasksRef.current = tasks;
     }, [tasks, editor, onChange]);
 
-    // Store editor reference
-    useEffect(() => {
-        editorRef.current = editorInstance;
-        setEditor(editorInstance);
-        return () => {
-            editorRef.current?.destroy();
-        };
-    }, [editorInstance]);
-
-    // Handle content updates
-    useEffect(() => {
-        if (editor && content !== editor.getHTML()) {
-            const currentContent = editor.getHTML();
-
-            if (content !== currentContent) {
-                editor.commands.setContent(content, false);
-            }
-        }
-    }, [content, editor]);
-
     // Handle focus/blur
     useEffect(() => {
         const handleVisibilityChange = () => {
@@ -989,7 +984,6 @@ export function NoteEditor({
 
     // Handle task creation and mention insertion
     const handleTaskCreate = (task: Task) => {
-        console.log("handleTaskCreate called with task:", task);
         if (editor && commandRange) {
             // Delete the slash command text first
             editor.chain().focus().deleteRange({
@@ -1037,7 +1031,6 @@ export function NoteEditor({
 
     // Create a wrapper for TaskDetail's onTaskUpdate
     const handleTaskDetailUpdate = (task: Task) => {
-        console.log("handleTaskDetailUpdate called with task:", task);
         handleTaskCreate(task);
     };
 

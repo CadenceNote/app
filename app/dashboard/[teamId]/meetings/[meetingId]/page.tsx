@@ -57,17 +57,6 @@ function LoadingSkeleton() {
             {/* Content Skeleton */}
             <div className="w-full">
                 <div className="max-w-[2000px] mx-auto px-6 py-6">
-                    {/* Description Skeleton */}
-                    <div className="mb-6">
-                        <Skeleton className="h-4 w-2/3 mb-4" />
-                        <div className="bg-blue-50 rounded-lg border border-blue-100 p-4">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {[...Array(3)].map((_, i) => (
-                                    <Skeleton key={i} className="h-4 w-full" />
-                                ))}
-                            </div>
-                        </div>
-                    </div>
 
                     {/* Goals and Agenda Skeleton */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -137,6 +126,7 @@ export default function TeamMeetingsPage() {
 
     const loadData = async () => {
         if (user) {
+
             try {
                 const [roleResponse, meetingResponse, teamResponse] = await Promise.all([
                     meetingApi.getTeamRole(parseInt(teamId)),
