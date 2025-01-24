@@ -885,11 +885,18 @@ export function NoteEditor({
                     return false;
                 },
                 blur: () => {
-                    // Save current content when editor loses focus
+                    // Check if content is truly empty (considering paragraphs and whitespace)
                     if (editor) {
-                        contentRef.current = editor.getHTML();
+                        const isEmpty = editor.getText().trim() === '';
+
+                        if (isEmpty && onDelete) {
+                            // Use requestAnimationFrame to ensure this runs after all state updates
+                            requestAnimationFrame(() => {
+                                onDelete();
+                            });
+                        }
+                        return false;
                     }
-                    return false;
                 }
             }
         },

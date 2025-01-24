@@ -7,7 +7,7 @@ interface SaveStatusProps {
 
 export function SaveStatus({ lastSaved, isSaving }: SaveStatusProps) {
     return (
-        <div className="text-xs text-muted-foreground flex items-center gap-2">
+        <div className="text-[14px] text-muted-foreground flex items-center gap-2">
             {isSaving ? (
                 <>
                     <span className="relative flex h-2 w-2">

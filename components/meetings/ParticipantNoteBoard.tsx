@@ -21,7 +21,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, CheckCircle2, AlertCircle, ListTodo } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ListTodo, Plus } from 'lucide-react';
 import { NoteEditor } from '@/components/meetings/NoteEditor';
 import { NoteRow } from '@/lib/types/note';
 import { MeetingNoteBlock } from '@/lib/types/meeting';
@@ -30,7 +30,6 @@ import { Task } from '@/lib/types/task';
 import { debounce } from '@/lib/utils';
 import { UserDetailModal } from './UserDetailModal';
 import { TaskDetail } from '../tasks/TaskDetail';
-import { Skeleton } from '../ui/skeleton';
 
 // Add role badge color mapping
 const getRoleBadgeStyles = (role: TeamRole) => {
@@ -62,7 +61,6 @@ interface ParticipantNoteBoardProps {
         full_name: string;
         role?: TeamRole;
     }[];
-    onSave: () => void;
     onSaveStatusChange: (isSaving: boolean, lastSaved: Date | null) => void;
 }
 
@@ -118,14 +116,12 @@ export function ParticipantNoteBoard({
     currentUserId,
     userRole,
     participants,
-    onSave,
     onSaveStatusChange
 }: ParticipantNoteBoardProps) {
     const { toast } = useToast();
     const [notes, setNotes] = useState<Record<string, { todo: NoteRow[]; blocker: NoteRow[]; done: NoteRow[]; }>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [tasks, setTasks] = useState<Task[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const notesRef = useRef(notes);
 
     // Add state for modals
@@ -258,14 +254,17 @@ export function ParticipantNoteBoard({
     // Modified initial data fetch to notify parent when ready
     useEffect(() => {
         const loadData = async () => {
-            setIsLoading(true);
             try {
                 await Promise.all([
                     loadParticipantNotes(),
                     loadTeamTasks()
                 ]);
-            } finally {
-                setIsLoading(false);
+            } catch {
+                toast({
+                    title: "Error",
+                    description: "Failed to load data",
+                    variant: "destructive"
+                });
             }
         };
         loadData();
@@ -436,7 +435,7 @@ export function ParticipantNoteBoard({
                                 onClick={() => addParticipantNote(participant.id, type)}
                                 className="h-7 w-7 p-0"
                             >
-                                <Edit className="h-4 w-4" />
+                                <Plus className="h-4 w-4" />
                             </Button>
                         )}
                     </div>

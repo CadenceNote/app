@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Users, Target, ListTodo, Clock, Info, ChevronRight, Edit2, Check, Link2 } from 'lucide-react';
+import { ListTodo, Info, Edit2, Check, Link2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { meetingApi } from '@/services/meetingApi';
 import { MeetingType, MeetingStatus, MeetingNoteBlock } from '@/lib/types/meeting';
@@ -21,9 +21,10 @@ import { ParticipantNoteBoard } from './ParticipantNoteBoard';
 import { useUser } from '@/hooks/useUser';
 import { teamApi } from '@/services/teamApi';
 import { Card } from '../ui/card';
+import { MeetingHeader } from './MeetingHeader';
+import { Textarea } from "@/components/ui/textarea";
 import { SaveStatus } from './SaveStatus';
 import Link from 'next/link';
-import { Textarea } from "@/components/ui/textarea";
 
 interface MeetingNotes {
     blocks: MeetingNoteBlock[];
@@ -173,10 +174,6 @@ export function DailyStandupPage({
     //     };
     // }, [teamId, meetingId]);
 
-    const handleSave = useCallback(() => {
-        fetchMeetingData();
-    }, [teamId, meetingId]);
-
     const handleSaveStatusChange = useCallback((saving: boolean, saved: Date | null) => {
         setIsSaving(saving);
         if (saved) setLastSaved(saved);
@@ -306,11 +303,48 @@ export function DailyStandupPage({
         }
     };
 
+    const handleTitleChange = async (newTitle: string) => {
+        try {
+            await meetingApi.updateMeeting(teamId, meetingId, {
+                title: newTitle
+            });
+            setMeeting(prev => prev ? {
+                ...prev,
+                title: newTitle
+            } : null);
+            toast({
+                title: "Success",
+                description: "Meeting title updated",
+            });
+        } catch (error) {
+            console.error('[MeetingNotes] Failed to update title:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update title",
+                variant: "destructive"
+            });
+        }
+    };
+
     if (!meeting || !currentUser || isUserLoading) return null;
 
     return (
         <div className="min-h-screen flex flex-col bg-[#F9FAFB]">
-
+            {!hideHeader && (
+                <MeetingHeader
+                    teamId={String(teamId)}
+                    meetingId={String(meetingId)}
+                    title={meeting.title}
+                    durationMinutes={meeting.duration_minutes}
+                    participantCount={meeting.participants.length}
+                    lastSaved={lastSaved}
+                    isSaving={isSaving}
+                    participants={meeting.participants}
+                    onCreateMeeting={() => {/* handle create meeting */ }}
+                    onTitleChange={handleTitleChange}
+                    canEdit={userRole === 'admin' || userRole === 'meeting_manager'}
+                />
+            )}
 
             {/* Main Content - Keep max-width for content readability */}
             <div className="flex-1 w-full">
@@ -392,7 +426,7 @@ export function DailyStandupPage({
                                         meeting.settings.resources.map((resource: string, index: number) => (
                                             <p key={index} className="text-sm text-gray-600 flex items-start">
                                                 <span className="mr-2">•</span>
-                                                <a 
+                                                <a
                                                     href={resource}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
@@ -464,7 +498,6 @@ export function DailyStandupPage({
                                 currentUserId={currentUserId}
                                 userRole={userRole}
                                 participants={meeting.participants}
-                                onSave={handleSave}
                                 onSaveStatusChange={handleSaveStatusChange}
                             />
                         </div>

@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 import { meetingApi } from '@/services/meetingApi';
+import { teamApi } from '@/services/teamApi';
 import { TeamRole } from '@/lib/types/team';
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -132,22 +133,26 @@ export default function TeamMeetingsPage() {
     const [meeting, setMeeting] = useState<Meeting | null>(null);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [teamName, setTeamName] = useState<string>('');
+
+    const loadData = async () => {
+        if (user) {
+            try {
+                const [roleResponse, meetingResponse, teamResponse] = await Promise.all([
+                    meetingApi.getTeamRole(parseInt(teamId)),
+                    meetingApi.getMeeting(parseInt(teamId), parseInt(meetingId)),
+                    teamApi.getTeam(parseInt(teamId))
+                ]);
+                setUserRole(roleResponse.role);
+                setMeeting(meetingResponse);
+                setTeamName(teamResponse.name || `Team ${teamId}`);
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+    };
 
     useEffect(() => {
-        const loadData = async () => {
-            if (user) {
-                try {
-                    const [roleResponse, meetingResponse] = await Promise.all([
-                        meetingApi.getTeamRole(parseInt(teamId)),
-                        meetingApi.getMeeting(parseInt(teamId), parseInt(meetingId))
-                    ]);
-                    setUserRole(roleResponse.role);
-                    setMeeting(meetingResponse);
-                } catch (error) {
-                    console.error('Error loading data:', error);
-                }
-            }
-        };
         loadData();
     }, [user, teamId, meetingId]);
 
@@ -167,15 +172,17 @@ export default function TeamMeetingsPage() {
         <div className="min-h-screen bg-[#F9FAFB]">
             <MeetingHeader
                 teamId={teamId}
+                teamName={teamName}
                 meetingId={meetingId}
                 onCreateMeeting={() => setIsCreateModalOpen(true)}
                 title={meeting.title}
-                description={meeting.description}
                 durationMinutes={meeting.duration_minutes}
                 participantCount={meeting.participants?.length}
                 lastSaved={lastSaved}
                 isSaving={isSaving}
                 participants={meeting.participants}
+                canEdit={userRole === 'admin' || userRole === 'meeting_manager'}
+                onUpdate={loadData}
             />
             <DailyStandupPage
                 teamId={parseInt(teamId)}
