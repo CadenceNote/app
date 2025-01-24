@@ -8,10 +8,10 @@ export enum MeetingType {
 }
 
 export enum MeetingStatus {
-    SCHEDULED = 'scheduled',
-    IN_PROGRESS = 'in_progress',
-    COMPLETED = 'completed',
-    CANCELLED = 'cancelled'
+    SCHEDULED = 'SCHEDULED',
+    IN_PROGRESS = 'IN_PROGRESS',
+    COMPLETED = 'COMPLETED',
+    CANCELLED = 'CANCELLED'
 }
 
 export interface Participant {

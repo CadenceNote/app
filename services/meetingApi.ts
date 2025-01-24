@@ -62,7 +62,13 @@ export const meetingApi = {
     },
 
     updateMeeting: async (teamId: number, meetingId: number, data: Partial<Meeting>): Promise<Meeting> => {
-        const response = await api.put(`/teams/${teamId}/meetings/${meetingId}/update/`, data);
+        // Ensure status is uppercase if it's being updated
+        const formattedData = {
+            ...data,
+            status: data.status?.toUpperCase()
+        };
+        console.log(formattedData);
+        const response = await api.put(`/teams/${teamId}/meetings/${meetingId}/update/`, formattedData);
         return response.data;
     },
 

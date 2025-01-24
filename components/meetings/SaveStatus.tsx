@@ -1,3 +1,7 @@
+/*
+* SaveStatus component
+* Displays the status of the meeting save operation
+*/
 import { formatDistanceToNow } from "date-fns";
 
 interface SaveStatusProps {
