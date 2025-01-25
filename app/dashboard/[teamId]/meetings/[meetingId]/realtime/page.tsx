@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
-
+import { useDebounce } from '@/hooks/useDebounce';
 interface NoteBlockContent {
     text?: string;
     html?: string;
@@ -61,11 +61,11 @@ export default function RealtimeNotesDemo() {
 
                 // Force token refresh
                 const { data: { user }, error: userError } = await supabase.auth.getUser();
-                console.log("USER", user);
                 // Direct table access test
                 const { data: testData } = await supabase
                     .from('meeting_note_blocks')
-                    .select('*');
+                    .select('*')
+                    .eq('meeting_id', meetingId);
 
                 console.log('Direct access test:', testData);
 
@@ -78,40 +78,36 @@ export default function RealtimeNotesDemo() {
             }
 
             try {
-                // Realtime setup with meeting_id filter
+                // Realtime setup with separate handlers for each event type
                 channel = supabase
                     .channel(`meeting_notes:${meetingId}`)
                     .on(
                         'postgres_changes',
                         {
-                            event: 'INSERT',
-                            schema: 'public',
-                            table: 'meeting_note_blocks',
-                            filter: `meeting_id=eq.${meetingId}`
-                        },
-                        handleRealtimeUpdate
-                    )
-                    .on(
-                        'postgres_changes',
-                        {
-                            event: 'UPDATE',
-                            schema: 'public',
-                            table: 'meeting_note_blocks',
-                            filter: `meeting_id=eq.${meetingId}`
-                        },
-                        handleRealtimeUpdate
-                    )
-                    .on(
-                        'postgres_changes',
-                        {
                             event: 'DELETE',
                             schema: 'public',
+                            table: 'meeting_note_blocks'
+                            // No filter for DELETE events since the payload won't have meeting_id
+                        },
+                        (payload) => {
+                            console.log('DELETE event received:', payload);
+                            handleRealtimeUpdate(payload as RealtimePayload);
+                        }
+                    )
+                    .on(
+                        'postgres_changes',
+                        {
+                            event: '*',  // Keep INSERT and UPDATE together with filter
+                            schema: 'public',
                             table: 'meeting_note_blocks',
                             filter: `meeting_id=eq.${meetingId}`
                         },
-                        handleRealtimeUpdate
+                        (payload) => {
+                            console.log('INSERT/UPDATE event received:', payload);
+                            handleRealtimeUpdate(payload as RealtimePayload);
+                        }
                     )
-                    .subscribe(status => {
+                    .subscribe((status) => {
                         console.log('Subscription status:', status);
                         setStatus(status === 'SUBSCRIBED' ? 'Connected!' : status);
                     });
@@ -229,35 +225,68 @@ export default function RealtimeNotesDemo() {
             </div>
 
             <div className="space-y-4">
-                {blocks?.map(block => (
-                    <div
+                {blocks.map(block => (
+                    <DebouncedNoteBlock
                         key={block.id}
-                        className="p-4 border rounded-lg shadow-sm"
-                    >
-                        <div className="text-sm text-gray-500">ID: {block.id}</div>
-                        <div className="mt-2 flex gap-2">
-                            <input
-                                type="text"
-                                value={block.content.text || ''}
-                                onChange={(e) => updateNote(block.id, e.target.value)}
-                                className="flex-1 p-2 border rounded"
-                            />
-                            <button
-                                onClick={() => deleteNote(block.id)}
-                                className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                            >
-                                Delete
-                            </button>
-                        </div>
-                        <div className="mt-2 text-sm text-gray-500">
-                            Created: {new Date(block.created_at).toLocaleString()}
-                        </div>
-                    </div>
+                        block={block}
+                        onUpdate={updateNote}
+                        onDelete={deleteNote}
+                    />
                 ))}
 
                 {blocks?.length === 0 && status === 'Connected!' && (
                     <p className="text-gray-500 italic">No notes yet. Updates will appear here in real-time.</p>
                 )}
+            </div>
+        </div>
+    );
+}
+
+
+function DebouncedNoteBlock({ block, onUpdate, onDelete }: {
+    block: NoteBlock;
+    onUpdate: (id: string, content: string) => void;
+    onDelete: (id: string) => void;
+}) {
+    const [localText, setLocalText] = useState(block.content.text || '');
+    const [debouncedText] = useDebounce(localText, 100);
+    const [isEditing, setIsEditing] = useState(false);
+
+    // Sync with remote updates when not editing
+    useEffect(() => {
+        if (!isEditing) {
+            setLocalText(block.content.text || '');
+        }
+    }, [block.content.text]);
+
+    // Trigger update when debounced text changes
+    useEffect(() => {
+        if (debouncedText !== block.content.text) {
+            onUpdate(block.id, debouncedText);
+        }
+    }, [debouncedText]);
+
+    return (
+        <div className="p-4 border rounded-lg shadow-sm">
+            <div className="flex gap-2">
+                <input
+                    value={localText}
+                    onChange={(e) => {
+                        setLocalText(e.target.value);
+                        setIsEditing(true);
+                    }}
+                    onBlur={() => setIsEditing(false)}
+                    className="flex-1 p-2 border rounded"
+                />
+                <button
+                    onClick={() => onDelete(block.id)}
+                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                >
+                    Delete
+                </button>
+            </div>
+            <div className="mt-2 text-sm text-gray-500">
+                Created: {new Date(block.created_at).toLocaleString()}
             </div>
         </div>
     );
