@@ -1,6 +1,6 @@
 // File: components/meetings/RealtimeNoteEditor.tsx
 'use client';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Collaboration } from '@tiptap/extension-collaboration';
 import { CollaborationCursor } from '@tiptap/extension-collaboration-cursor';
@@ -49,14 +49,18 @@ export function RealtimeNoteEditor({
     const [showSaving, setShowSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'hidden'>('hidden');
     const [isContentLoaded, setIsContentLoaded] = useState(false);
-    const editorRef = useRef<any>(null);
+    const [isProviderConnected, setIsProviderConnected] = useState(false);
+
+    const editorRef = useRef<Editor | null>(null);
     const saveTimeoutRef = useRef<NodeJS.Timeout>();
     const isInitialLoad = useRef(true);
     const hasLoadedFromDB = useRef(false);
 
+    // Create a key that changes when important dependencies change
+    const editorKey = `${section}-${currentUserId}-${participants.length}`;
+
     // Handle saving status with fade out animation
     useEffect(() => {
-        // Don't show save status during initial load
         if (isInitialLoad.current) {
             return;
         }
@@ -69,10 +73,8 @@ export function RealtimeNoteEditor({
             }
         } else if (showSaving) {
             setSaveStatus('saved');
-            // Keep "Saved" visible for 2 seconds before starting fade
             saveTimeoutRef.current = setTimeout(() => {
                 setSaveStatus('hidden');
-                // Wait for fade animation to complete before hiding
                 setTimeout(() => {
                     setShowSaving(false);
                 }, 500);
@@ -106,109 +108,8 @@ export function RealtimeNoteEditor({
             } finally {
                 setIsSaving(false);
             }
-        }, 1000)
+        }, 2000)
     ).current;
-
-    // Only initialize editor when we have both ydoc and provider
-    const editor = useEditor({
-        extensions: [
-            StarterKit.configure({
-                history: false,
-            }),
-            Collaboration.configure({
-                document: ydoc || new Y.Doc(),
-                field: section,
-                fragmentContent: false
-            }),
-            CollaborationCursor.configure({
-                provider: provider,
-                user: {
-                    name: participants.find(p => p.id === currentUserId)?.full_name || 'Anonymous',
-                    color: COLORS[currentUserId % COLORS.length],
-                },
-            }),
-        ],
-        content: EMPTY_DOC,
-        editable: editable && !!provider?.wsconnected,
-        onCreate: () => {
-            console.log('[Editor] Initialized:', section);
-            if (provider?.wsconnected && provider?.synced) {
-                loadContent();
-            }
-        },
-        onUpdate: ({ editor }) => {
-            if (!provider?.wsconnected || !isContentLoaded) return;
-
-            // Mark that we're past initial load
-            isInitialLoad.current = false;
-
-            console.log('[Editor] Content updated:', section);
-            const content = editor.getJSON();
-            if (content.content?.length > 0) {
-                console.log('[Editor] Saving content:', {
-                    section,
-                    contentLength: content.content.length,
-                    connected: provider?.wsconnected,
-                    synced: provider?.synced
-                });
-                debouncedSave(content);
-            }
-        },
-        immediatelyRender: false,
-    });
-
-    // Monitor Y.js text updates and sync status
-    useEffect(() => {
-        if (!editor || !provider || !ydoc) return;
-
-        try {
-            const ytext = ydoc.get(section, Y.XmlFragment);
-
-            const observer = () => {
-                console.log('[YJS] Text updated:', {
-                    section,
-                    connected: provider.wsconnected,
-                    synced: provider.synced
-                });
-            };
-
-            ytext.observe(observer);
-
-            // Monitor provider sync status
-            const handleSync = (isSynced: boolean) => {
-                console.log('[YJS] Provider sync changed:', {
-                    section,
-                    isSynced,
-                    connected: provider.wsconnected
-                });
-
-                if (isSynced && !hasLoadedFromDB.current) {
-                    hasLoadedFromDB.current = true;
-                    loadContent();
-                }
-            };
-
-            provider.on('sync', handleSync);
-
-            // Initial load if already synced
-            if (provider.synced && !hasLoadedFromDB.current) {
-                hasLoadedFromDB.current = true;
-                loadContent();
-            }
-
-            return () => {
-                ytext.unobserve(observer);
-                provider.off('sync', handleSync);
-                hasLoadedFromDB.current = false;
-            };
-        } catch (error) {
-            console.error('[YJS] Error setting up text sync:', error);
-        }
-    }, [editor, provider, ydoc, section]);
-
-    useEffect(() => {
-        editorRef.current = editor;
-    }, [editor]);
 
     const loadContent = async () => {
         if (!editorRef.current) return;
@@ -230,7 +131,6 @@ export function RealtimeNoteEditor({
                 hasContent: !!data?.[0]?.content
             });
 
-            // Set content without triggering save status
             isInitialLoad.current = true;
             editorRef.current.commands.setContent(content);
             setIsContentLoaded(true);
@@ -241,16 +141,154 @@ export function RealtimeNoteEditor({
         }
     };
 
+    // Editor initialization with proper cleanup
+    useEffect(() => {
+        console.log('Editor initialization:', {
+            currentUserId,
+            participants,
+            matchedUser: participants.find(p => p.id === currentUserId),
+        });
+
+        const editor = new Editor({
+            extensions: [
+                StarterKit.configure({
+                    history: false,
+                }),
+                Collaboration.configure({
+                    document: ydoc || new Y.Doc(),
+                    field: section,
+                }),
+                ...(provider ? [
+                    CollaborationCursor.configure({
+                        provider: provider,
+                        user: {
+                            name: participants.find(p => p.id === currentUserId)?.full_name || 'Anonymous',
+                            color: COLORS[currentUserId % COLORS.length],
+                        },
+                    })
+                ] : []),
+            ],
+            content: EMPTY_DOC,
+            editable: editable && provider?.wsconnected,
+            onCreate: () => {
+                console.log('[Editor] Initialized:', section);
+                if (provider?.wsconnected && provider?.synced) {
+                    loadContent();
+                }
+            },
+            onUpdate: ({ editor }) => {
+                if (!provider?.wsconnected || !isContentLoaded) return;
+
+                isInitialLoad.current = false;
+
+                console.log('[Editor] Content updated:', section);
+                const content = editor.getJSON();
+                if (content.content?.length > 0) {
+                    console.log('[Editor] Saving content:', {
+                        section,
+                        contentLength: content.content.length,
+                        connected: provider?.wsconnected,
+                        synced: provider?.synced
+                    });
+                    debouncedSave(content);
+                }
+            },
+        });
+
+        editorRef.current = editor;
+
+        return () => {
+            editor.destroy();
+        };
+    }, [provider, ydoc, section, currentUserId, participants, editable]);
+
+    // Update editor state when provider connection changes
+    useEffect(() => {
+        if (editorRef.current && provider) {
+            editorRef.current.setEditable(editable && provider.wsconnected);
+        }
+    }, [provider?.wsconnected, editable]);
+
+    useEffect(() => {
+        if (!provider) return;
+
+        const handleStatus = ({ status }: { status: string }) => {
+            setIsProviderConnected(status === 'connected');
+            if (editorRef.current) {
+                editorRef.current.setEditable(editable && status === 'connected');
+            }
+        };
+
+        provider.on('status', handleStatus);
+        return () => {
+            provider.off('status', handleStatus);
+        };
+    }, [provider, editable]);
+
+    // Monitor provider sync status
+    useEffect(() => {
+        if (!editorRef.current || !provider || !ydoc) return;
+
+        try {
+            const ytext = ydoc.get(section, Y.XmlFragment);
+
+            const observer = () => {
+                console.log('[YJS] Text updated:', {
+                    section,
+                    connected: provider.wsconnected,
+                    synced: provider.synced
+                });
+            };
+
+            ytext.observe(observer);
+
+            const handleSync = (isSynced: boolean) => {
+                console.log('[YJS] Provider sync changed:', {
+                    section,
+                    isSynced,
+                    connected: provider.wsconnected
+                });
+
+                if (isSynced && !hasLoadedFromDB.current) {
+                    hasLoadedFromDB.current = true;
+                    loadContent();
+                }
+            };
+
+            provider.on('sync', handleSync);
+
+            if (provider.synced && !hasLoadedFromDB.current) {
+                hasLoadedFromDB.current = true;
+                loadContent();
+            }
+
+            return () => {
+                ytext.unobserve(observer);
+                provider.off('sync', handleSync);
+                hasLoadedFromDB.current = false;
+            };
+        } catch (error) {
+            console.error('[YJS] Error setting up text sync:', error);
+        }
+    }, [editorRef.current, provider, ydoc, section]);
+
     return (
-        <div className={`border rounded-lg ${editable ? 'bg-white hover:border-gray-300 transition-colors' : 'bg-gray-50'}`}>
-            <div className="flex items-center justify-between px-4 py-2 border-b">
-                <h3 className="text-sm font-medium text-gray-900">
-                    {sectionTitle}
-                </h3>
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm h-full flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/50">
+                <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-medium tracking-tight">
+                        {sectionTitle}
+                    </h3>
+                    {!editable && (
+                        <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                            View only
+                        </span>
+                    )}
+                </div>
                 <div className="flex items-center space-x-2 min-w-[60px] justify-end">
                     {showSaving && (
                         <span
-                            className={`text-xs text-gray-500 flex items-center transition-opacity duration-500
+                            className={`text-xs flex items-center transition-opacity duration-500
                                 ${saveStatus === 'saving' ? 'opacity-100' :
                                     saveStatus === 'saved' ? 'opacity-100' :
                                         'opacity-0'}`}
@@ -261,33 +299,91 @@ export function RealtimeNoteEditor({
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                     </svg>
-                                    Saving...
+                                    <span className="text-muted-foreground">Saving...</span>
                                 </>
                             ) : (
                                 <>
                                     <svg className="h-3 w-3 mr-1 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                     </svg>
-                                    Saved
+                                    <span className="text-green-600">Saved</span>
                                 </>
                             )}
                         </span>
                     )}
                 </div>
             </div>
-            <div className="p-4">
+            <div className="flex-1 p-3 relative min-h-[150px]">
+                <style jsx global>{`
+                    .collaboration-cursor__caret {
+                        border-left: 1px solid currentColor;
+                        border-right: 1px solid currentColor;
+                        margin-left: -1px;
+                        margin-right: -1px;
+                        pointer-events: none;
+                        word-break: normal;
+                        position: relative;
+                        z-index: 20;
+                    }
+
+                    .collaboration-cursor__label {
+                        position: absolute;
+                        top: -1.4em;
+                        left: -1px;
+                        font-size: 12px;
+                        font-style: normal;
+                        font-weight: 600;
+                        line-height: normal;
+                        white-space: nowrap;
+                        padding: 0.1rem 0.3rem;
+                        color: white;
+                        border-radius: 3px;
+                        user-select: none;
+                        pointer-events: none;
+                        z-index: 50;
+                    }
+
+                    .ProseMirror {
+                        min-height: 140px !important;
+                        height: 100%;
+                        padding: 0.5rem;
+                        border-radius: 0.375rem;
+                        background-color: transparent;
+                        transition: all 0.15s ease;
+                    }
+
+                    .ProseMirror:hover {
+                        background-color: hsl(var(--muted)/0.5);
+                    }
+
+                    .ProseMirror p {
+                        margin: 0;
+                        line-height: 1.6;
+                    }
+
+                    .ProseMirror p.is-empty::before {
+                        content: attr(data-placeholder);
+                        float: left;
+                        color: hsl(var(--muted-foreground));
+                        pointer-events: none;
+                        height: 0;
+                    }
+
+                    .ProseMirror:focus {
+                        outline: none !important;
+                        background-color: hsl(var(--muted)/0.7);
+                    }
+
+                    .ProseMirror > * + * {
+                        margin-top: 0.5em;
+                    }
+                `}</style>
                 <EditorContent
-                    editor={editor}
-                    className={`prose prose-sm max-w-none min-h-[120px] focus:outline-none ${!editable ? 'opacity-75 cursor-not-allowed' : ''}`}
+                    key={editorKey}
+                    editor={editorRef.current}
+                    className={`prose prose-sm max-w-none focus:outline-none ${!editable ? 'opacity-75 cursor-not-allowed' : ''}`}
+                    data-placeholder={`Add your ${sectionTitle.toLowerCase()} notes here...`}
                 />
-                {!editable && (
-                    <div className="mt-2 text-xs text-gray-500 flex items-center">
-                        <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                        View only
-                    </div>
-                )}
             </div>
         </div>
     );

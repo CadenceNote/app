@@ -1,10 +1,14 @@
-// File: components/meetings/RealtimeNoteBoard.tsx
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { RealtimeNoteEditor } from './RealtimeNoteEditor';
 import { TeamRole } from '@/lib/types/team';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '../common/UserAvatar';
 
 const COLORS = ['#f783ac', '#74b816', '#1098ad', '#d9480f', '#7048e8', '#e8590c'];
 const SECTIONS = ['TODO', 'DONE', 'BLOCKERS'];
@@ -14,6 +18,7 @@ export function RealtimeNoteBoard({
   participants,
   currentUserId,
   userRole,
+  onReady,
 }: {
   meetingId: number;
   participants: Array<{
@@ -24,14 +29,15 @@ export function RealtimeNoteBoard({
   }>;
   currentUserId: number;
   userRole: string;
+  onReady?: () => void;
 }) {
   const [provider, setProvider] = useState<WebsocketProvider | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isSynced, setIsSynced] = useState(false);
   const [showContent, setShowContent] = useState(false);
   const providerRef = useRef<WebsocketProvider | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
-  const [ydoc, setYDoc] = useState<Y.Doc | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>();
+  const [ydoc] = useState(() => new Y.Doc());  // Create doc immediately and keep it stable
   const isVisibleRef = useRef(true);
 
   // Handle visibility changes
@@ -54,31 +60,44 @@ export function RealtimeNoteBoard({
     };
   }, []);
 
+  // Initialize shared types for each section
   useEffect(() => {
-    if (!meetingId) return;
+    if (!ydoc) return;
+
+    participants.forEach(participant => {
+      SECTIONS.forEach(section => {
+        const sectionKey = `${participant.id}-${section}`;
+        if (!ydoc.share.has(sectionKey)) {
+          ydoc.get(sectionKey, Y.XmlFragment);
+        }
+      });
+    });
+  }, [ydoc, participants]);
+
+  // Set up WebSocket provider
+  useEffect(() => {
+    if (!meetingId || !ydoc) return;
 
     const setupProvider = () => {
       try {
         // If we already have a provider and it's connected, don't recreate
         if (providerRef.current?.wsconnected) {
-          return () => { };
+          return;
         }
 
         console.log('[YJS] Creating new provider for meeting:', meetingId);
 
-        // Create new doc and provider
-        const doc = new Y.Doc();
+        // Create new provider with the existing doc
         const newProvider = new WebsocketProvider(
           process.env.NEXT_PUBLIC_YJS_SERVER_URL || 'wss://yjs-server-qot7.onrender.com',
           `meeting-${meetingId}`,
-          doc,
+          ydoc,
           { connect: true }
         );
 
         // Set up connection status handlers
         newProvider.on('status', ({ status }: { status: 'connected' | 'disconnected' | 'connecting' }) => {
           console.log('[WebSocket] Status changed:', status);
-          // Only update states if the page is visible
           if (isVisibleRef.current) {
             setIsConnected(status === 'connected');
             if (status !== 'connected') {
@@ -89,7 +108,6 @@ export function RealtimeNoteBoard({
 
         newProvider.on('sync', (isSynced: boolean) => {
           console.log('[YJS] Sync status:', isSynced);
-          // Only update states if the page is visible
           if (isVisibleRef.current) {
             setIsSynced(isSynced);
             if (!isSynced) {
@@ -100,17 +118,6 @@ export function RealtimeNoteBoard({
               }, 300);
             }
           }
-        });
-
-        // Initialize shared types for each section
-        participants.forEach(participant => {
-          SECTIONS.forEach(section => {
-            const sectionKey = `${participant.id}-${section}`;
-            console.log('[YJS] Initializing shared type for section:', sectionKey);
-            if (!doc.share.has(sectionKey)) {
-              doc.get(sectionKey, Y.XmlFragment);
-            }
-          });
         });
 
         // Set up awareness
@@ -125,15 +132,9 @@ export function RealtimeNoteBoard({
           });
         }
 
-        newProvider.awareness.on('change', () => {
-          const clients = Array.from(newProvider.awareness.getStates().values());
-          console.log('[YJS] Connected clients:', clients);
-        });
-
         // Store provider references
         providerRef.current = newProvider;
         setProvider(newProvider);
-        setYDoc(doc);
 
         return () => {
           console.log('[YJS] Cleaning up provider');
@@ -141,34 +142,26 @@ export function RealtimeNoteBoard({
             clearTimeout(reconnectTimeoutRef.current);
           }
           newProvider.destroy();
+          providerRef.current = null;
         };
       } catch (error) {
         console.error('[YJS] Error setting up provider:', error);
         setIsConnected(false);
         setIsSynced(false);
+        providerRef.current = null;
       }
     };
 
-    return setupProvider();
-  }, [meetingId, currentUserId, participants]);
+    const cleanup = setupProvider();
+    return () => cleanup?.();
+  }, [meetingId, currentUserId, participants, ydoc]);
 
-  if (!isConnected || !isSynced || !showContent) {
-    return (
-      <div className="flex-1 relative">
-        <div className="absolute inset-0 flex items-center justify-center bg-[#F9FAFB]">
-          <div className="text-center">
-            <div className="mb-4">
-              <svg className="animate-spin h-10 w-10 text-blue-600 mx-auto" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
-            <div className="text-lg font-medium text-gray-900">Loading collaborative session...</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Notify when board is ready
+  useEffect(() => {
+    if (isConnected && isSynced && showContent) {
+      onReady?.();
+    }
+  }, [isConnected, isSynced, showContent, onReady]);
 
   // Check if user has edit permissions
   const canEdit = (participantId: number) => {
@@ -178,51 +171,62 @@ export function RealtimeNoteBoard({
 
   return (
     <div className="p-6 animate-fade-in">
-      <div className="sticky top-0 z-10 -mt-6 -mx-6 px-6 py-2 bg-white/80 backdrop-blur-sm border-b flex items-center justify-between mb-6">
-        <h2 className="font-semibold text-gray-900">Collaborative Notes</h2>
-        <div className="flex items-center space-x-2">
-          <div className="flex items-center text-green-600 text-sm">
-            <div className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></div>
-            Connected
+      <div className="sticky top-0 z-10 -mt-6 -mx-6 px-6 py-4 bg-background/95 backdrop-blur-sm border-b flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-semibold text-gray-900">Collaborative Notes</h2>
+          <div className={`flex items-center text-sm ${isConnected ? 'text-green-600' : 'text-muted-foreground'}`}>
+            <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-muted'}`}></div>
+            {isConnected ? 'Connected' : 'Connecting...'}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-8">
+      <div className="grid grid-cols-1 gap-6">
         {participants.map((participant) => (
-          <div key={participant.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="flex items-center px-6 py-4 bg-gray-50 border-b">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900">{participant.full_name}</h3>
-                <p className="text-sm text-gray-500">{participant.email}</p>
-              </div>
-              <div className="flex items-center space-x-3">
-                {participant.id === currentUserId && (
-                  <span className="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                    You
-                  </span>
-                )}
-                {!canEdit(participant.id) && (
-                  <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
-                    View Only
-                  </span>
-                )}
+          <div key={participant.id} className="bg-card rounded-lg border shadow-sm overflow-hidden">
+            <div className="bg-muted/50 px-6 py-4 border-b">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <UserAvatar
+                    name={participant.full_name}
+                    email={participant.email}
+                    color={COLORS[participant.id % COLORS.length]}
+                  />
+                  <div className="space-y-1">
+                    <h3 className="text-base font-semibold">{participant.full_name}</h3>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">{participant.email}</p>
+                      {participant.id === currentUserId && (
+                        <Badge variant="default">You</Badge>
+                      )}
+                      {!canEdit(participant.id) && (
+                        <Badge variant="outline">View Only</Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6">
-              {SECTIONS.map((section) => (
-                <RealtimeNoteEditor
-                  key={`${participant.id}-${section}`}
-                  ydoc={ydoc}
-                  provider={provider}
-                  section={`${participant.id}-${section}`}
-                  currentUserId={currentUserId}
-                  meetingId={meetingId}
-                  participants={participants}
-                  editable={canEdit(participant.id)}
-                  sectionTitle={section}
-                />
-              ))}
+            <div className="p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {SECTIONS.map((section, index) => (
+                  <div key={`${participant.id}-${section}`} className="flex flex-col">
+                    <RealtimeNoteEditor
+                      ydoc={ydoc}
+                      provider={provider}
+                      section={`${participant.id}-${section}`}
+                      currentUserId={currentUserId}
+                      meetingId={meetingId}
+                      participants={participants}
+                      editable={canEdit(participant.id)}
+                      sectionTitle={section}
+                    />
+                    {index < SECTIONS.length - 1 && (
+                      <Separator orientation="horizontal" className="lg:hidden my-4" />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ))}
