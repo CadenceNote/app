@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { taskApi } from "@/services/taskApi"
+import { MeetingHeader } from "@/components/meetings/MeetingHeader"
 
 interface MeetingWithParticipants extends Omit<Meeting, "participants"> {
     participants: Array<{
@@ -37,42 +38,40 @@ export default function RealtimeDemo() {
     const [boardReady, setBoardReady] = useState(false)
     const [showLoader, setShowLoader] = useState(true)
 
-    useEffect(() => {
-        const fetchAllData = async () => {
-            try {
-                if (userLoading) return
+    const fetchAllData = useCallback(async () => {
+        try {
+            if (userLoading) return
 
-                const [meetingRes, teamDataRes, tasksRes] = await Promise.all([
-                    meetingApi.getMeeting(meetingId, teamId),
-                    teamApi.getTeam(teamId),
-                    taskApi.listTasks(teamId),
-                ])
+            const [meetingRes, teamDataRes, tasksRes] = await Promise.all([
+                meetingApi.getMeeting(meetingId, teamId),
+                teamApi.getTeam(teamId),
+                taskApi.listTasks(teamId),
+            ])
 
-                // Transform the meeting data to match the expected format
-                const meetingWithParticipants = {
-                    ...meetingRes,
-                    participants: meetingRes.participants.map((p) => ({
-                        id: p.id,
-                        email: p.email || "",
-                        full_name: p.full_name || "",
-                        role: teamDataRes.members?.find((m) => m.user_id === p.id)?.role || "member",
-                    })),
-                }
-                console.log("meetingRes", meetingRes)
-                console.log("meetingWithParticipants", meetingWithParticipants)
-                setMeeting(meetingWithParticipants)
-                setTeamData(teamDataRes)
-                setCurrentUserId(user?.id ?? null)
-                setTasks(tasksRes)
-            } catch (error) {
-                console.error("Error fetching data:", error)
-                setError("Failed to load meeting data")
-                setShowLoader(false)
+            // Transform the meeting data to match the expected format
+            const meetingWithParticipants = {
+                ...meetingRes,
+                participants: meetingRes.participants.map((p) => ({
+                    id: p.id,
+                    email: p.email || "",
+                    full_name: p.full_name || "",
+                    role: teamDataRes.members?.find((m) => m.user_id === p.id)?.role || "member",
+                })),
             }
+            setMeeting(meetingWithParticipants)
+            setTeamData(teamDataRes)
+            setCurrentUserId(user?.id ?? null)
+            setTasks(tasksRes)
+        } catch (error) {
+            console.error("Error fetching data:", error)
+            setError("Failed to load meeting data")
+            setShowLoader(false)
         }
-
-        fetchAllData()
     }, [teamId, meetingId, user, userLoading])
+
+    useEffect(() => {
+        fetchAllData()
+    }, [fetchAllData])
 
     const handleBoardReady = useCallback(() => {
         setBoardReady(true)
@@ -112,8 +111,10 @@ export default function RealtimeDemo() {
     const userRole = teamData?.members?.find((m) => m.user_id === currentUserId)?.role || "member"
 
     return (
-        <div className="flex-1 bg-[#F9FAFB] relative min-h-screen">
-            {/* Loading overlay */}
+        <div className="min-h-screen bg-gray-50">
+
+
+            {/* Loading Overlay */}
             <div
                 className={`fixed inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center 
                 transition-opacity duration-300 ${showLoader ? "opacity-100" : "opacity-0 pointer-events-none"}`}
@@ -143,6 +144,22 @@ export default function RealtimeDemo() {
             </div>
 
             {/* Main content */}
+            {meeting && teamData && (
+                <MeetingHeader
+                    teamId={String(teamId)}
+                    teamName={teamData.name}
+                    meetingId={String(meetingId)}
+                    title={meeting.title}
+                    durationMinutes={meeting.duration_minutes}
+                    participantCount={meeting.participants.length}
+                    participants={meeting.participants}
+                    canEdit={userRole === 'admin' || userRole === 'meeting_manager'}
+                    onUpdate={fetchAllData}
+                    isDemoMode={true}
+                    onCreateMeeting={() => { }}
+                />
+            )}
+
             <div
                 className={`max-w-[2000px] mx-auto transition-opacity duration-300 ${showLoader ? "opacity-0" : "opacity-100"}`}
             >
@@ -161,4 +178,3 @@ export default function RealtimeDemo() {
         </div>
     )
 }
-

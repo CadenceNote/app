@@ -605,7 +605,6 @@ export function RealtimeNoteEditor({
         if (!editorRef.current) return;
 
         try {
-            console.log('[Editor] Loading content from DB:', section);
             const { data } = await supabase
                 .from('meeting_note_blocks')
                 .select('content')
@@ -616,10 +615,7 @@ export function RealtimeNoteEditor({
                 .limit(1);
 
             const content = data?.[0]?.content || EMPTY_DOC;
-            console.log('[Editor] Content loaded:', {
-                section,
-                hasContent: !!data?.[0]?.content
-            });
+
 
             isInitialLoad.current = true;
             editorRef.current.commands.setContent(content);
@@ -633,11 +629,7 @@ export function RealtimeNoteEditor({
 
     // Editor initialization with mentions and slash commands
     useEffect(() => {
-        console.log('Editor initialization:', {
-            currentUserId,
-            participants,
-            matchedUser: participants.find(p => p.id === currentUserId),
-        });
+
 
         const editor = new Editor({
             extensions: [
@@ -956,7 +948,6 @@ export function RealtimeNoteEditor({
             content: EMPTY_DOC,
             editable: editable && provider?.wsconnected,
             onCreate: () => {
-                console.log('[Editor] Initialized:', section);
                 if (provider?.wsconnected && provider?.synced) {
                     loadContent();
                 }
@@ -966,18 +957,41 @@ export function RealtimeNoteEditor({
 
                 isInitialLoad.current = false;
 
-                console.log('[Editor] Content updated:', section);
                 const content = editor.getJSON();
                 if (content.content?.length > 0) {
-                    console.log('[Editor] Saving content:', {
-                        section,
-                        contentLength: content.content.length,
-                        connected: provider?.wsconnected,
-                        synced: provider?.synced
-                    });
                     debouncedSave(content);
                 }
             },
+            editorProps: {
+                handleClick: (view, pos, event) => {
+                    const target = event.target as HTMLElement;
+                    if (target.hasAttribute('data-type') && target.hasAttribute('data-id')) {
+                        const type = target.getAttribute('data-type') as 'user' | 'task';
+                        const id = target.getAttribute('data-id');
+                        if (id && onMentionClick) {
+                            onMentionClick(type, id);
+                        }
+                        return true;
+                    }
+                    return false;
+                },
+                // handleKeyDown: (view, event) => {
+                //     // Check if we have an active suggestion
+                //     const userSuggestion = userMentionPluginKey.getState(view.state);
+                //     const taskSuggestion = taskMentionPluginKey.getState(view.state);
+                //     const slashCommandsState = view.state.plugins.find(plugin => plugin.key?.toString() === 'slashCommands')?.getState(view.state);
+
+                //     // If any suggestion or command menu is active, let the suggestion handler deal with it
+                //     if ((userSuggestion && userSuggestion.active) ||
+                //         (taskSuggestion && taskSuggestion.active) ||
+                //         slashCommandsState) {
+                //         return false; // Return false to let the suggestion handler handle the event
+                //     }
+
+                //     return false;
+                // },
+            },
+
         });
 
         editorRef.current = editor;
@@ -1015,25 +1029,19 @@ export function RealtimeNoteEditor({
         if (!editorRef.current || !provider || !ydoc) return;
 
         try {
-            const ytext = ydoc.get(section, Y.XmlFragment);
+            // const ytext = ydoc.get(section, Y.XmlFragment);
 
-            const observer = () => {
-                console.log('[YJS] Text updated:', {
-                    section,
-                    connected: provider.wsconnected,
-                    synced: provider.synced
-                });
-            };
+            // const observer = () => {
+            //     console.log('[YJS] Text updated:', {
+            //         section,
+            //         connected: provider.wsconnected,
+            //         synced: provider.synced
+            //     });
+            // };
 
-            ytext.observe(observer);
+            // ytext.observe(observer);
 
             const handleSync = (isSynced: boolean) => {
-                console.log('[YJS] Provider sync changed:', {
-                    section,
-                    isSynced,
-                    connected: provider.wsconnected
-                });
-
                 if (isSynced && !hasLoadedFromDB.current) {
                     hasLoadedFromDB.current = true;
                     loadContent();
@@ -1048,7 +1056,7 @@ export function RealtimeNoteEditor({
             }
 
             return () => {
-                ytext.unobserve(observer);
+                // ytext.unobserve(observer);
                 provider.off('sync', handleSync);
                 hasLoadedFromDB.current = false;
             };

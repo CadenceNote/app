@@ -10,6 +10,10 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { UserAvatar } from '../common/UserAvatar';
 import { Task } from '@/lib/types/task';
+import React from 'react';
+import { MeetingHeader } from './MeetingHeader';
+import { TaskDetail } from '../tasks/TaskDetail';
+import { UserDetailModal } from './UserDetailModal';
 
 const COLORS = ['#f783ac', '#74b816', '#1098ad', '#d9480f', '#7048e8', '#e8590c'];
 const SECTIONS = ['TODO', 'DONE', 'BLOCKERS'];
@@ -21,8 +25,6 @@ export function RealtimeNoteBoard({
   userRole,
   onReady,
   tasks,
-  onMentionClick,
-  onTaskCreate,
   teamId,
 }: {
   meetingId: number;
@@ -36,8 +38,6 @@ export function RealtimeNoteBoard({
   userRole: string;
   onReady?: () => void;
   tasks?: Array<{ id: number; title: string; team_ref_number: string; }>;
-  onMentionClick?: (type: 'user' | 'task', id: string) => void;
-  onTaskCreate?: (task: any) => void;
   teamId: number;
 }) {
   const [provider, setProvider] = useState<WebsocketProvider | null>(null);
@@ -102,7 +102,6 @@ export function RealtimeNoteBoard({
           return;
         }
 
-        console.log('[YJS] Creating new provider for meeting:', meetingId);
 
         // Create new provider with the existing doc
         const newProvider = new WebsocketProvider(
@@ -114,7 +113,6 @@ export function RealtimeNoteBoard({
 
         // Set up connection status handlers
         newProvider.on('status', ({ status }: { status: 'connected' | 'disconnected' | 'connecting' }) => {
-          console.log('[WebSocket] Status changed:', status);
           if (isVisibleRef.current) {
             setIsConnected(status === 'connected');
             if (status !== 'connected') {
@@ -124,7 +122,6 @@ export function RealtimeNoteBoard({
         });
 
         newProvider.on('sync', (isSynced: boolean) => {
-          console.log('[YJS] Sync status:', isSynced);
           if (isVisibleRef.current) {
             setIsSynced(isSynced);
             if (!isSynced) {
@@ -140,7 +137,6 @@ export function RealtimeNoteBoard({
         // Set up awareness
         const currentUser = participants.find(p => p.id === currentUserId);
         if (currentUser) {
-          console.log('[YJS] Setting local user state:', currentUser.full_name);
           newProvider.awareness.setLocalState({
             user: {
               name: currentUser.full_name,
@@ -154,7 +150,6 @@ export function RealtimeNoteBoard({
         setProvider(newProvider);
 
         return () => {
-          console.log('[YJS] Cleaning up provider');
           if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
           }
@@ -204,10 +199,55 @@ export function RealtimeNoteBoard({
     <div className="p-6 animate-fade-in">
       <div className="sticky top-0 z-10 -mt-6 -mx-6 px-6 py-4 bg-background/95 backdrop-blur-sm border-b flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <h2 className="text-xl font-semibold text-gray-900">Collaborative Notes</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Realtime Collaborative Meeting Notes (Beta) </h2>
           <div className={`flex items-center text-sm ${isConnected ? 'text-green-600' : 'text-muted-foreground'}`}>
             <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-muted'}`}></div>
             {isConnected ? 'Connected' : 'Connecting...'}
+          </div>
+        </div>
+      </div>
+      {/* Info Banner */}
+      <div className="bg-blue-50 border-b border-blue-100 mb-6">
+        <div className="max-w-[2000px] mx-auto px-4 py-3">
+          <div className="flex items-start gap-3">
+            <div className="p-1.5 bg-blue-100 rounded-full">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-blue-900">Realtime Collaboration Mode (Beta)</h3>
+              <p className="mt-1 text-sm text-blue-700">
+                You're in realtime mode where changes sync instantly. Other participants can see your cursor and edits in real-time.
+                Each participant has their own color for easy identification.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-3">
+                <div className="inline-flex items-center gap-1.5 text-xs text-blue-700">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                  </svg>
+                  Live Cursors
+                </div>
+                <div className="inline-flex items-center gap-1.5 text-xs text-blue-700">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Instant Sync
+                </div>
+                <div className="inline-flex items-center gap-1.5 text-xs text-blue-700">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  Multi-User Editing
+                </div>
+                <div className="inline-flex items-center gap-1.5 text-xs text-blue-700">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Auto-Saving
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -252,7 +292,7 @@ export function RealtimeNoteBoard({
                       editable={canEdit(participant.id)}
                       sectionTitle={section}
                       tasks={tasks}
-                      onMentionClick={onMentionClick}
+                      onMentionClick={handleMentionClick}
                       teamId={teamId}
                     />
                     {index < SECTIONS.length - 1 && (
@@ -265,6 +305,24 @@ export function RealtimeNoteBoard({
           </div>
         ))}
       </div>
+      {/* Modals */}
+      {selectedUser && (
+        <UserDetailModal
+          open={!!selectedUser}
+          onOpenChange={(open) => !open && setSelectedUser(null)}
+          user={selectedUser}
+        />
+      )}
+
+      {selectedTask && (
+        <TaskDetail
+          isOpen={!!selectedTask}
+          onClose={() => setSelectedTask(null)}
+          task={selectedTask}
+          teamId={teamId}
+          onTaskUpdate={() => { }}
+        />
+      )}
     </div>
   );
 }

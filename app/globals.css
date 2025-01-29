@@ -193,6 +193,7 @@ body {
 .ProseMirror:focus {
   outline: none !important;
   background-color: hsl(var(--muted)/0.7);
+
 }
 
 .ProseMirror>*+* {

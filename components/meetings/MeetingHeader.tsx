@@ -27,6 +27,7 @@ interface MeetingHeaderProps {
     }>;
     canEdit?: boolean;
     onUpdate?: () => void;
+    isDemoMode?: boolean;
 }
 
 export function MeetingHeader({
@@ -41,7 +42,8 @@ export function MeetingHeader({
     isSaving,
     participants = [],
     canEdit,
-    onUpdate
+    onUpdate,
+    isDemoMode
 }: MeetingHeaderProps) {
     const { toast } = useToast();
     const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
@@ -217,11 +219,22 @@ export function MeetingHeader({
                             <div className="flex items-center gap-3">
                                 <Button
                                     size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                        const baseUrl = `/dashboard/${teamId}/meetings/${meetingId}`;
+                                        window.location.href = isDemoMode ? baseUrl : `${baseUrl}/demo`;
+                                    }}
+                                    className="h-8 px-3 text-[14px] font-medium"
+                                >
+                                    {isDemoMode ? "Old View" : "Switch to Realtime (Beta)"}
+                                </Button>
+                                <Button
+                                    size="sm"
                                     onClick={onCreateMeeting}
                                     className={cn(
                                         "h-8 px-3 text-[14px] font-medium",
-                                        "bg-gray-900 hover:bg-gray-800 active:bg-gray-950",
-                                        "text-white"
+                                        // "bg-gray-900 hover:bg-gray-800 active:bg-gray-950",
+                                        // "text-white"
                                     )}
                                 >
                                     <Plus className="h-4 w-4 mr-1.5 flex-shrink-0" />
