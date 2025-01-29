@@ -27,6 +27,8 @@
     "@radix-ui/react-tooltip": "^1.1.6",
     "@supabase/supabase-js": "^2.47.12",
     "@tiptap/core": "^2.11.2",
+    "@tiptap/extension-collaboration": "^2.11.3",
+    "@tiptap/extension-collaboration-cursor": "^2.11.3",
     "@tiptap/extension-mention": "^2.11.2",
     "@tiptap/extension-placeholder": "^2.11.2",
     "@tiptap/extension-task-item": "^2.11.2",
@@ -35,7 +37,9 @@
     "@tiptap/starter-kit": "^2.11.2",
     "@tiptap/suggestion": "^2.11.2",
     "@types/lodash": "^4.17.14",
+    "@types/react-transition-group": "^4.4.12",
     "axios": "^1.7.9",
+    "babel-plugin-react-compiler": "^19.0.0-beta-27714ef-20250124",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
@@ -47,9 +51,13 @@
     "react": "^19.0.0",
     "react-day-picker": "^8.10.1",
     "react-dom": "^19.0.0",
+    "react-transition-group": "^4.4.5",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "tippy.js": "^6.3.7"
+    "tippy.js": "^6.3.7",
+    "y-prosemirror": "^1.2.15",
+    "y-websocket": "^2.1.0",
+    "yjs": "^13.6.23"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

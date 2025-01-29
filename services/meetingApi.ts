@@ -14,6 +14,7 @@ interface Meeting {
         id: number;
         email: string;
         full_name: string;
+        role?: TeamRole;
     }[];
     notes: Record<string, MeetingNotes>;
     summary?: string;
