@@ -9,6 +9,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { UserAvatar } from '../common/UserAvatar';
+import { Task } from '@/lib/types/task';
 
 const COLORS = ['#f783ac', '#74b816', '#1098ad', '#d9480f', '#7048e8', '#e8590c'];
 const SECTIONS = ['TODO', 'DONE', 'BLOCKERS'];
@@ -19,6 +20,10 @@ export function RealtimeNoteBoard({
   currentUserId,
   userRole,
   onReady,
+  tasks,
+  onMentionClick,
+  onTaskCreate,
+  teamId,
 }: {
   meetingId: number;
   participants: Array<{
@@ -30,6 +35,10 @@ export function RealtimeNoteBoard({
   currentUserId: number;
   userRole: string;
   onReady?: () => void;
+  tasks?: Array<{ id: number; title: string; team_ref_number: string; }>;
+  onMentionClick?: (type: 'user' | 'task', id: string) => void;
+  onTaskCreate?: (task: any) => void;
+  teamId: number;
 }) {
   const [provider, setProvider] = useState<WebsocketProvider | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -39,6 +48,14 @@ export function RealtimeNoteBoard({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>();
   const [ydoc] = useState(() => new Y.Doc());  // Create doc immediately and keep it stable
   const isVisibleRef = useRef(true);
+
+
+  const [selectedUser, setSelectedUser] = useState<{
+    id: number;
+    email: string;
+    full_name: string;
+  } | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   // Handle visibility changes
   useEffect(() => {
@@ -156,12 +173,26 @@ export function RealtimeNoteBoard({
     return () => cleanup?.();
   }, [meetingId, currentUserId, participants, ydoc]);
 
+  const handleMentionClick = (type: 'user' | 'task', id: string) => {
+    if (type === 'user') {
+      const user = participants.find(p => p.id === Number(id));
+      if (user) {
+        setSelectedUser(user);
+      }
+    } else if (type === 'task') {
+      const task = tasks.find(t => t.id === Number(id));
+      if (task) {
+        setSelectedTask(task);
+      }
+    }
+  };
   // Notify when board is ready
   useEffect(() => {
     if (isConnected && isSynced && showContent) {
       onReady?.();
     }
   }, [isConnected, isSynced, showContent, onReady]);
+
 
   // Check if user has edit permissions
   const canEdit = (participantId: number) => {
@@ -220,6 +251,9 @@ export function RealtimeNoteBoard({
                       participants={participants}
                       editable={canEdit(participant.id)}
                       sectionTitle={section}
+                      tasks={tasks}
+                      onMentionClick={onMentionClick}
+                      teamId={teamId}
                     />
                     {index < SECTIONS.length - 1 && (
                       <Separator orientation="horizontal" className="lg:hidden my-4" />

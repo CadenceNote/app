@@ -11,6 +11,7 @@ import { useUser } from "@/hooks/useUser"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { taskApi } from "@/services/taskApi"
 
 interface MeetingWithParticipants extends Omit<Meeting, "participants"> {
     participants: Array<{
@@ -25,8 +26,11 @@ export default function RealtimeDemo() {
     const params = useParams()
     const teamId = Number.parseInt(params.teamId as string)
     const meetingId = Number.parseInt(params.meetingId as string)
+
     const [meeting, setMeeting] = useState<MeetingWithParticipants | null>(null)
     const [teamData, setTeamData] = useState<Team | null>(null)
+    const [tasks, setTasks] = useState<Array<{ id: number; title: string; team_ref_number: string; }>>([])
+
     const [error, setError] = useState<string>("")
     const [currentUserId, setCurrentUserId] = useState<number | null>(null)
     const { user, isLoading: userLoading } = useUser()
@@ -38,9 +42,10 @@ export default function RealtimeDemo() {
             try {
                 if (userLoading) return
 
-                const [meetingRes, teamDataRes] = await Promise.all([
+                const [meetingRes, teamDataRes, tasksRes] = await Promise.all([
                     meetingApi.getMeeting(meetingId, teamId),
                     teamApi.getTeam(teamId),
+                    taskApi.listTasks(teamId),
                 ])
 
                 // Transform the meeting data to match the expected format
@@ -58,6 +63,7 @@ export default function RealtimeDemo() {
                 setMeeting(meetingWithParticipants)
                 setTeamData(teamDataRes)
                 setCurrentUserId(user?.id ?? null)
+                setTasks(tasksRes)
             } catch (error) {
                 console.error("Error fetching data:", error)
                 setError("Failed to load meeting data")
@@ -147,6 +153,8 @@ export default function RealtimeDemo() {
                         userRole={userRole}
                         participants={meeting.participants}
                         onReady={handleBoardReady}
+                        tasks={tasks}
+                        teamId={teamId}
                     />
                 )}
             </div>
