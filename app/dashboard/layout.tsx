@@ -1,5 +1,20 @@
-import DashboardLayout from '@/components/layouts/DashboardLayout';
+'use client';
 
-export default function Layout({ children }: { children: React.ReactNode }) {
-    return <DashboardLayout>{children}</DashboardLayout>;
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from '@/components/sidebar/app-sidebar';
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <SidebarProvider>
+            <div className="flex w-full h-screen overflow-hidden">
+                <AppSidebar className="shrink-0 bg-background/5" />
+                {/* Main Content */}
+                <main className="flex-1 overflow-auto bg-background">
+                    <div className="min-h-screen w-full">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        </SidebarProvider>
+    );
 }
