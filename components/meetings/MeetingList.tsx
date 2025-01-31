@@ -237,6 +237,16 @@ export function MeetingList({ teamId, emptyState }: MeetingListProps) {
             : `${hours}h`;
     };
 
+    const getStatusColor = (status: MeetingStatus) => {
+        const colors = {
+            [MeetingStatus.SCHEDULED]: 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100',
+            [MeetingStatus.IN_PROGRESS]: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100',
+            [MeetingStatus.COMPLETED]: 'bg-secondary text-secondary-foreground',
+            [MeetingStatus.CANCELLED]: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-100'
+        };
+        return colors[status] || colors[MeetingStatus.SCHEDULED];
+    };
+
     const MeetingCard = ({ meeting }: { meeting: Meeting }) => (
         <Card
             className={`mb-4 hover:shadow-md transition-all duration-200 border-l-4 cursor-pointer
@@ -256,7 +266,7 @@ export function MeetingList({ teamId, emptyState }: MeetingListProps) {
                             <Badge variant="outline" className="ml-2">
                                 {MEETING_TYPE_LABELS[meeting.type]}
                             </Badge>
-                            <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[meeting.status]}`}>
+                            <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(meeting.status)}`}>
                                 {meeting.status.charAt(0) + meeting.status.slice(1).toLowerCase()}
                             </span>
                         </div>

@@ -39,22 +39,22 @@ const getPersonalItems = () => [
       {
         title: "Main Dashboard",
         url: "/dashboard",
-        icon: Home,
       },
       {
         title: "My Meetings",
         url: "/dashboard/my-meetings",
-        icon: Calendar,
       },
       {
         title: "My Tasks",
         url: "/dashboard/my-tasks",
-        icon: ListTodo,
       },
       {
         title: "My Reports",
         url: "/dashboard/my-reports",
-        icon: BarChart2,
+      },
+      {
+        title: "My Teams",
+        url: "/dashboard/my-teams",
       },
     ],
   },
@@ -131,7 +131,7 @@ export const AppSidebar = memo(function AppSidebar({ className, ...props }: Reac
   // Memoize teams list items
   const teamsListItems = React.useMemo(() => !isTeamContext ? [
     {
-      title: "My Teams",
+      title: "Team Space",
       url: "/dashboard/teams",
       icon: Building2,
       items: [

@@ -228,7 +228,7 @@ export function DailyStandupPage({
     };
 
     return (
-        <div className="min-h-screen flex flex-col bg-[#F9FAFB]">
+        <div className="min-h-screen flex flex-col bg-background">
             {!hideHeader && (
                 <MeetingHeader
                     teamId={String(teamId)}
@@ -252,11 +252,11 @@ export function DailyStandupPage({
                     {/* Goals, Agenda, and Description Grid */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                         {/* Meeting Description */}
-                        <Card className="bg-white">
+                        <Card className="bg-card">
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-sm font-medium flex items-center text-gray-900">
-                                        <Info className="h-4 w-4 mr-2 text-blue-600" />
+                                    <h3 className="text-sm font-medium flex items-center text-foreground">
+                                        <Info className="h-4 w-4 mr-2 text-primary" />
                                         Meeting Description
                                     </h3>
                                     {(userRole === 'meeting_manager' || userRole === 'admin') && (
@@ -264,7 +264,7 @@ export function DailyStandupPage({
                                             variant="ghost"
                                             size="sm"
                                             onClick={handleDescriptionEdit}
-                                            className="h-8 px-2 text-gray-500 hover:text-gray-900"
+                                            className="h-8 px-2 text-muted-foreground hover:text-foreground"
                                         >
                                             {isEditingDescription ? (
                                                 <Check className="h-4 w-4" />
@@ -283,20 +283,20 @@ export function DailyStandupPage({
                                             className="min-h-[100px] text-sm"
                                         />
                                     ) : meeting?.description ? (
-                                        <p className="text-sm text-gray-600">{meeting.description}</p>
+                                        <p className="text-sm text-muted-foreground">{meeting.description}</p>
                                     ) : (
-                                        <p className="text-sm text-gray-500 italic">No description available</p>
+                                        <p className="text-sm text-muted-foreground italic">No description available</p>
                                     )}
                                 </div>
                             </div>
                         </Card>
 
                         {/* Meeting Resources */}
-                        <Card className="bg-white">
+                        <Card className="bg-card">
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-sm font-medium flex items-center text-gray-900">
-                                        <Link2 className="h-4 w-4 mr-2 text-blue-600" />
+                                    <h3 className="text-sm font-medium flex items-center text-foreground">
+                                        <Link2 className="h-4 w-4 mr-2 text-primary" />
                                         Resources & Links
                                     </h3>
                                     {(userRole === 'meeting_manager' || userRole === 'admin') && (
@@ -304,7 +304,7 @@ export function DailyStandupPage({
                                             variant="ghost"
                                             size="sm"
                                             onClick={handleResourcesEdit}
-                                            className="h-8 px-2 text-gray-500 hover:text-gray-900"
+                                            className="h-8 px-2 text-muted-foreground hover:text-foreground"
                                         >
                                             {isEditingResources ? (
                                                 <Check className="h-4 w-4" />
@@ -324,31 +324,31 @@ export function DailyStandupPage({
                                         />
                                     ) : meeting?.settings?.resources?.length ? (
                                         meeting.settings.resources.map((resource: string, index: number) => (
-                                            <p key={index} className="text-sm text-gray-600 flex items-start">
+                                            <p key={index} className="text-sm text-muted-foreground flex items-start">
                                                 <span className="mr-2">•</span>
                                                 <a
                                                     href={resource}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="text-blue-600 hover:underline break-all"
+                                                    className="text-primary hover:underline break-all"
                                                 >
                                                     {resource}
                                                 </a>
                                             </p>
                                         ))
                                     ) : (
-                                        <p className="text-sm text-gray-500 italic">No resources added</p>
+                                        <p className="text-sm text-muted-foreground italic">No resources added</p>
                                     )}
                                 </div>
                             </div>
                         </Card>
 
                         {/* Meeting Agenda */}
-                        <Card className="bg-white">
+                        <Card className="bg-card">
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-sm font-medium flex items-center text-gray-900">
-                                        <ListTodo className="h-4 w-4 mr-2 text-blue-600" />
+                                    <h3 className="text-sm font-medium flex items-center text-foreground">
+                                        <ListTodo className="h-4 w-4 mr-2 text-primary" />
                                         Meeting Agenda
                                     </h3>
                                     {(userRole === 'meeting_manager' || userRole === 'admin') && (
@@ -356,7 +356,7 @@ export function DailyStandupPage({
                                             variant="ghost"
                                             size="sm"
                                             onClick={handleAgendaEdit}
-                                            className="h-8 px-2 text-gray-500 hover:text-gray-900"
+                                            className="h-8 px-2 text-muted-foreground hover:text-foreground"
                                         >
                                             {isEditingAgenda ? (
                                                 <Check className="h-4 w-4" />
@@ -376,13 +376,13 @@ export function DailyStandupPage({
                                         />
                                     ) : meeting.settings?.agenda?.length ? (
                                         meeting.settings.agenda.map((item: string, index: number) => (
-                                            <p key={index} className="text-sm text-gray-600 flex items-start">
-                                                <span className="mr-2 text-blue-600 font-medium">{index + 1}.</span>
+                                            <p key={index} className="text-sm text-muted-foreground flex items-start">
+                                                <span className="mr-2 text-primary font-medium">{index + 1}.</span>
                                                 {item}
                                             </p>
                                         ))
                                     ) : (
-                                        <p className="text-sm text-gray-500 italic">No agenda items</p>
+                                        <p className="text-sm text-muted-foreground italic">No agenda items</p>
                                     )}
                                 </div>
                             </div>
@@ -391,7 +391,7 @@ export function DailyStandupPage({
 
                     {/* Notes Section */}
                     {meeting.participants && (
-                        <div className="bg-white rounded-lg shadow-sm">
+                        <div className="bg-card rounded-lg shadow-sm">
                             <ParticipantNoteBoard
                                 teamId={teamId}
                                 meetingId={meeting.id}
@@ -406,25 +406,25 @@ export function DailyStandupPage({
                     )}
                 </div>
                 <div className="max-w-[2000px] mx-auto px-6">
-                    <div className="bg-blue-50 rounded-lg border border-blue-100 p-4">
-                        <div className="flex items-center text-sm text-blue-900 mb-3">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 p-4">
+                        <div className="flex items-center text-sm text-blue-900 dark:text-blue-100 mb-3">
                             <Info className="h-4 w-4 mr-2" />
                             <span className="font-medium">Quick Tips</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800 dark:text-blue-200">
                             <div className="flex items-start">
                                 <span className="mr-2">•</span>
-                                Use <kbd className="mx-1 px-1.5 py-0.5 bg-white rounded border border-blue-200 text-xs">@</kbd>
+                                Use <kbd className="mx-1 px-1.5 py-0.5 bg-background rounded border border-blue-200 dark:border-blue-700 text-xs">@</kbd>
                                 to mention team members
                             </div>
                             <div className="flex items-start">
                                 <span className="mr-2">•</span>
-                                Use <kbd className="mx-1 px-1.5 py-0.5 bg-white rounded border border-blue-200 text-xs">#</kbd>
+                                Use <kbd className="mx-1 px-1.5 py-0.5 bg-background rounded border border-blue-200 dark:border-blue-700 text-xs">#</kbd>
                                 to reference tasks
                             </div>
                             <div className="flex items-start">
                                 <span className="mr-2">•</span>
-                                Press <kbd className="mx-1 px-1.5 py-0.5 bg-white rounded border border-blue-200 text-xs">/</kbd>
+                                Press <kbd className="mx-1 px-1.5 py-0.5 bg-background rounded border border-blue-200 dark:border-blue-700 text-xs">/</kbd>
                                 to create tasks
                             </div>
                         </div>

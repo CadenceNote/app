@@ -6,8 +6,11 @@ import {
   ChevronsUpDown,
   CreditCard,
   LogOut,
+  Moon,
   Sparkles,
+  Sun,
 } from "lucide-react"
+import { useTheme } from "next-themes"
 
 import {
   Avatar,
@@ -29,7 +32,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 export function NavUser({
   user,
 }: {
@@ -40,10 +45,12 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const { theme, setTheme } = useTheme()
 
   return (
     <SidebarMenu>
-      <SidebarMenuItem>
+      <SidebarMenuItem className="flex gap-2">
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
@@ -87,6 +94,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <BadgeCheck />
@@ -101,7 +109,23 @@ export function NavUser({
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
+
+
             <DropdownMenuSeparator />
+
+            {
+              theme === "dark" ? (
+                <DropdownMenuItem onClick={() => setTheme("light")}>
+                  <Sun />
+                  Light Mode
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => setTheme("dark")}>
+                  <Moon />
+                  Dark Mode
+                </DropdownMenuItem>
+              )
+            }
             <DropdownMenuItem>
               <LogOut />
               Log out

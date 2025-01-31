@@ -175,7 +175,7 @@ export function TeamCard({ team, onUpdate }: TeamCardProps) {
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
-                            <Users className="h-5 w-5 text-blue-500" />
+                            <Users className="h-5 w-5" />
                             <CardTitle>{team.name}</CardTitle>
                         </div>
                         <DropdownMenu>
@@ -223,7 +223,7 @@ export function TeamCard({ team, onUpdate }: TeamCardProps) {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-gray-600 mb-4">{team.description || 'No description provided'}</p>
+                    <p className="text-sm mb-4">{team.description || 'No description provided'}</p>
                     <div className="space-y-2">
                         <Button
                             className="w-full"

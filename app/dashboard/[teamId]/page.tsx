@@ -90,15 +90,15 @@ export default function TeamDashboardPage() {
     }, [teamId]);
 
     return (
-        <div className="min-h-screen bg-[#F9FAFB]">
+        <div className="min-h-screen bg-background">
             {/* Header */}
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-200">
+            <div className="sticky top-0 z-10 bg-background border-b">
                 <div className="w-full">
                     <div className="h-16">
                         <div className="h-full max-w-[2000px] mx-auto px-6 flex justify-between items-center">
                             <div className="space-y-1">
-                                <h1 className="text-xl font-semibold text-gray-900">Team Dashboard</h1>
-                                <p className="text-sm text-gray-500">
+                                <h1 className="text-xl font-semibold">Team Dashboard</h1>
+                                <p className="text-sm text-muted-foreground">
                                     Manage your team&apos;s meetings and tasks
                                 </p>
                             </div>
@@ -122,38 +122,38 @@ export default function TeamDashboardPage() {
                 <div className="max-w-[2000px] mx-auto px-6 py-6">
                     {/* Stats Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <Card className="bg-white hover:shadow-md transition-shadow">
+                        <Card className="hover:shadow-md transition-shadow">
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Upcoming Meetings</CardTitle>
-                                <Calendar className="h-4 w-4 text-blue-600" />
+                                <Calendar className="h-4 w-4 text-primary" />
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold">{stats.meetings.upcoming}</div>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted-foreground">
                                     +{stats.meetings.thisWeek} scheduled this week
                                 </p>
                             </CardContent>
                         </Card>
-                        <Card className="bg-white hover:shadow-md transition-shadow">
+                        <Card className="hover:shadow-md transition-shadow">
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Active Tasks</CardTitle>
-                                <ListTodo className="h-4 w-4 text-blue-600" />
+                                <ListTodo className="h-4 w-4 text-primary" />
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold">{stats.tasks.active}</div>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted-foreground">
                                     {stats.tasks.dueThisWeek} due this week
                                 </p>
                             </CardContent>
                         </Card>
-                        <Card className="bg-white hover:shadow-md transition-shadow">
+                        <Card className="hover:shadow-md transition-shadow">
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-                                <Users className="h-4 w-4 text-blue-600" />
+                                <Users className="h-4 w-4 text-primary" />
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold">{stats.team.total}</div>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted-foreground">
                                     {stats.team.active} active members
                                 </p>
                             </CardContent>
@@ -165,21 +165,20 @@ export default function TeamDashboardPage() {
                         {/* Meetings Section */}
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <a href={`/dashboard/${teamId}/meetings`}><h2 className="text-lg font-semibold text-gray-900">Meetings</h2></a>
-
+                                <a href={`/dashboard/${teamId}/meetings`}><h2 className="text-lg font-semibold">Meetings</h2></a>
                             </div>
-                            <div className="bg-white rounded-lg shadow-sm">
+                            <Card>
                                 <div className="p-6">
                                     <MeetingList
                                         teamId={teamId}
                                         emptyState={
                                             <div
-                                                className="text-center p-8 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors"
+                                                className="text-center p-8 cursor-pointer hover:bg-muted/50 rounded-lg transition-colors"
                                                 onClick={() => setIsCreateModalOpen(true)}
                                             >
-                                                <Calendar className="h-8 w-8 mx-auto mb-3 text-gray-400" />
-                                                <p className="text-sm text-gray-600 mb-2">No upcoming meetings scheduled</p>
-                                                <Button variant="link" className="text-blue-600 hover:text-blue-700">
+                                                <Calendar className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                                                <p className="text-sm text-muted-foreground mb-2">No upcoming meetings scheduled</p>
+                                                <Button variant="link" className="text-primary hover:text-primary/90">
                                                     Schedule your next meeting
                                                     <ArrowRight className="h-4 w-4 ml-2" />
                                                 </Button>
@@ -187,27 +186,26 @@ export default function TeamDashboardPage() {
                                         }
                                     />
                                 </div>
-                            </div>
+                            </Card>
                         </div>
 
                         {/* Tasks Section */}
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
+                                <h2 className="text-lg font-semibold">Tasks</h2>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-500 flex items-center">
+                                    <span className="text-sm text-muted-foreground flex items-center">
                                         <Info className="h-4 w-4 mr-2" />
-                                        You can press <kbd className="mx-1 px-1.5 py-0.5 bg-gray-100 rounded border text-xs">/</kbd>
+                                        You can press <kbd className="mx-1 px-1.5 py-0.5 bg-muted rounded border text-xs">/</kbd>
                                         in meeting notes to create tasks
                                     </span>
-
                                 </div>
                             </div>
-                            <div className="bg-white rounded-lg shadow-sm">
+                            <Card>
                                 <div className="p-6">
                                     <TaskList teamId={teamId} />
                                 </div>
-                            </div>
+                            </Card>
                         </div>
                     </div>
                 </div>

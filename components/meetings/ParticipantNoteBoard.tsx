@@ -34,11 +34,11 @@ import { TaskDetail } from '../tasks/TaskDetail';
 const getRoleBadgeStyles = (role: TeamRole) => {
     switch (role) {
         case 'admin':
-            return 'bg-blue-50 text-blue-700 border-blue-200';
+            return 'bg-primary/10 text-primary border-primary/20';
         case 'meeting_manager':
-            return 'bg-purple-50 text-purple-700 border-purple-200';
+            return 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800';
         default:
-            return 'bg-gray-50 text-gray-700 border-gray-200';
+            return 'bg-secondary text-secondary-foreground border-secondary/20';
     }
 };
 
@@ -91,11 +91,11 @@ const canEditNotes = (participantId: number, userRole: TeamRole, currentUserId: 
 const getSectionIcon = (type: 'todo' | 'blocker' | 'done') => {
     switch (type) {
         case 'todo':
-            return <ListTodo className="h-4 w-4 text-blue-500" />;
+            return <ListTodo className="h-4 w-4 text-primary" />;
         case 'blocker':
-            return <AlertCircle className="h-4 w-4 text-red-500" />;
+            return <AlertCircle className="h-4 w-4 text-destructive" />;
         case 'done':
-            return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+            return <CheckCircle2 className="h-4 w-4 text-success" />;
     }
 };
 
@@ -407,7 +407,7 @@ export function ParticipantNoteBoard({
 
     const renderParticipantCard = (participant: typeof participants[0]) => (
         <Card key={participant.id} data-participant-id={participant.id} className="w-full">
-            <div className="grid grid-cols-[200px_1fr] divide-x">
+            <div className="grid grid-cols-[200px_1fr] divide-x divide-border">
                 <div className="p-4 space-y-4">
                     <div className="flex flex-col items-center text-center gap-3">
                         <Avatar className="h-16 w-16">
@@ -415,7 +415,7 @@ export function ParticipantNoteBoard({
                             <AvatarFallback>{participant.full_name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                         </Avatar>
                         <div className="space-y-1">
-                            <CardTitle className="text-base">{participant.full_name}</CardTitle>
+                            <CardTitle className="text-base text-foreground">{participant.full_name}</CardTitle>
                             <p className="text-sm text-muted-foreground">{participant.email}</p>
                             {participant.role && (
                                 <Badge variant="outline" className={cn("text-xs", getRoleBadgeStyles(participant.role))}>

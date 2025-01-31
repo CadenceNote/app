@@ -89,10 +89,10 @@ export default function RealtimeDemo() {
 
     if (error) {
         return (
-            <div className="flex-1 flex items-center justify-center bg-gray-50 min-h-screen">
+            <div className="flex-1 flex items-center justify-center bg-background min-h-screen">
                 <Card className="w-[350px]">
                     <CardContent className="flex flex-col items-center justify-center p-6">
-                        <svg className="h-12 w-12 text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-12 w-12 text-destructive mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
@@ -100,8 +100,8 @@ export default function RealtimeDemo() {
                                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                             />
                         </svg>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Meeting</h3>
-                        <p className="text-sm text-gray-500 text-center">{error}</p>
+                        <h3 className="text-lg font-medium text-foreground mb-2">Error Loading Meeting</h3>
+                        <p className="text-sm text-muted-foreground text-center">{error}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -111,16 +111,14 @@ export default function RealtimeDemo() {
     const userRole = teamData?.members?.find((m) => m.user_id === currentUserId)?.role || "member"
 
     return (
-        <div className="min-h-screen bg-gray-50">
-
-
+        <div className="min-h-screen bg-background">
             {/* Loading Overlay */}
             <div
-                className={`fixed inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center 
+                className={`fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center 
                 transition-opacity duration-300 ${showLoader ? "opacity-100" : "opacity-0 pointer-events-none"}`}
             >
                 <div className="flex items-center gap-4">
-                    <svg className="animate-spin h-10 w-10 text-blue-600" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-10 w-10 text-primary" viewBox="0 0 24 24">
                         <circle
                             className="opacity-25"
                             cx="12"
@@ -137,8 +135,8 @@ export default function RealtimeDemo() {
                         />
                     </svg>
                     <div className="text-center space-y-2">
-                        <h3 className="text-lg font-medium text-gray-900">Loading collaborative session...</h3>
-                        <p className="text-sm text-gray-500">Connecting to your meeting space.</p>
+                        <h3 className="text-lg font-medium text-foreground">Loading collaborative session...</h3>
+                        <p className="text-sm text-muted-foreground">Connecting to your meeting space.</p>
                     </div>
                 </div>
             </div>

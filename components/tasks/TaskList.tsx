@@ -158,20 +158,20 @@ export function TaskList({ teamId }: TaskListProps) {
 
     const getStatusColor = (status: TaskStatus) => {
         const colors = {
-            [TaskStatus.TODO]: 'bg-gray-100 text-gray-800',
-            [TaskStatus.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
-            [TaskStatus.DONE]: 'bg-green-100 text-green-800',
-            [TaskStatus.BLOCKED]: 'bg-red-100 text-red-800'
+            [TaskStatus.TODO]: 'bg-secondary text-secondary-foreground',
+            [TaskStatus.IN_PROGRESS]: 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100',
+            [TaskStatus.DONE]: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100',
+            [TaskStatus.BLOCKED]: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-100'
         };
         return colors[status] || colors[TaskStatus.TODO];
     };
 
     const getPriorityColor = (priority: TaskPriority) => {
         const colors = {
-            [TaskPriority.LOW]: 'bg-gray-100 text-gray-800',
-            [TaskPriority.MEDIUM]: 'bg-yellow-100 text-yellow-800',
-            [TaskPriority.HIGH]: 'bg-red-100 text-red-800',
-            [TaskPriority.URGENT]: 'bg-orange-100 text-orange-800'
+            [TaskPriority.LOW]: 'bg-secondary text-secondary-foreground',
+            [TaskPriority.MEDIUM]: 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100',
+            [TaskPriority.HIGH]: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-100',
+            [TaskPriority.URGENT]: 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-100'
         };
         return colors[priority] || colors[TaskPriority.LOW];
     };
@@ -182,11 +182,11 @@ export function TaskList({ teamId }: TaskListProps) {
     };
 
     return (
-        <div className="bg-white rounded-lg shadow">
+        <div className="rounded-lg border bg-card">
             <div className="p-4 border-b flex items-center gap-4">
                 <div className="flex-1">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
                             placeholder="Search tasks..."
                             value={searchTerm}
@@ -247,7 +247,7 @@ export function TaskList({ teamId }: TaskListProps) {
                         ) : tasks.map((task) => (
                             <TableRow
                                 key={task.id}
-                                className="cursor-pointer hover:bg-gray-50"
+                                className="cursor-pointer hover:bg-muted/50"
                                 onClick={() => handleRowClick(task)}
                             >
                                 <TableCell className="font-medium">T-{task.team_ref_number}</TableCell>
@@ -296,7 +296,7 @@ export function TaskList({ teamId }: TaskListProps) {
                                             )}
                                             <DropdownMenuItem
                                                 onClick={() => handleTaskDelete(task)}
-                                                className="text-red-600"
+                                                className="text-destructive"
                                             >
                                                 Delete
                                             </DropdownMenuItem>
