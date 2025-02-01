@@ -3,7 +3,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/services/api';
 import { supabase } from '@/lib/supabase';
-import { User, UserCircle, LogOut, ChevronDown, LayoutDashboard } from 'lucide-react';
+import { User, UserCircle, LogOut, ChevronDown, LayoutDashboard, MousePointerClick } from 'lucide-react';
+import { Inter, JetBrains_Mono } from 'next/font/google';
+
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'] });
+
 /*
 *   Starting Layout Component Wrapper, used to wrap all pages that requires a LOGO + NAVIGATION + SIGN IN/OUT + FOOTER
 */
@@ -113,8 +117,12 @@ const Layout = ({ children }) => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         {/* Logo/Home link */}
-                        <Link href="/" className="text-xl font-semibold text-gray-900 hover:text-gray-700">
-                            CadenceNotes
+
+                        <Link href="/" className={`flex items-center gap-3 text-xl font-bold text-gray-900 hover:text-gray-700 ${jetbrainsMono.className}`}>
+                            <MousePointerClick className="w-5 h-5 text-blue-600" />
+                            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
+                                Agilee
+                            </span>
                         </Link>
 
                         {/* Navigation */}
@@ -161,7 +169,7 @@ const Layout = ({ children }) => {
                 <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center">
                         <p className="text-gray-500 text-sm">
-                            © 2025 CadenceNotes. All rights reserved.
+                            © 2025 Agilee. All rights reserved.
                         </p>
                         <div className="flex space-x-6">
                             <a href="#" className="text-gray-500 hover:text-gray-900 text-sm">

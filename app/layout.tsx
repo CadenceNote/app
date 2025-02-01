@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CadenceNotes",
+  title: "Agilee",
   description: "Streamline your agile ceremonies with intelligent note-taking.",
 };
 
