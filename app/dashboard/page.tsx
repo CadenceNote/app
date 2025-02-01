@@ -505,7 +505,7 @@ export default function DashboardPage() {
                                     onSelect={setDate}
                                     className="rounded-md border"
                                     components={{
-                                        Day: ({ date: dayDate, ...props }) => {
+                                        Day: ({ date: dayDate, displayMonth, ...props }) => {  // do NOT remove displayMonth, or will have error
                                             if (!dayDate) return <div {...props} />
 
                                             const formattedDate = dayDate.toISOString().split("T")[0]

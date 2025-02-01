@@ -6,7 +6,6 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -128,8 +127,6 @@ body {
   }
 }
 
-
-
 @layer base {
   * {
     @apply border-border;
@@ -198,9 +195,6 @@ body {
   transition: border-color 0.2s ease, opacity 0.2s ease;
 }
 
-
-
-
 .collaboration-cursor__caret {
   border-left: 1px solid currentColor;
   border-right: 1px solid currentColor;
@@ -239,7 +233,7 @@ body {
 }
 
 .ProseMirror:hover {
-  background-color: hsl(var(--muted)/0.5);
+  background-color: hsl(var(--muted) / 0.5);
 }
 
 .ProseMirror p {
@@ -257,8 +251,7 @@ body {
 
 .ProseMirror:focus {
   outline: none !important;
-  background-color: hsl(var(--muted)/0.7);
-
+  background-color: hsl(var(--muted) / 0.7);
 }
 
 .ProseMirror>*+* {
@@ -290,7 +283,7 @@ body {
 }
 
 .mention-user {
-  background: hsl(var(--primary)/0.1);
+  background: hsl(var(--primary) / 0.1);
   /* color: hsl(var(--primary)); */
   /* border-color: hsl(var(--primary) / 0.2); */
 }
@@ -300,4 +293,23 @@ body {
   /* color: hsl(var(--primary)); */
   /* border-color: hsl(var(--primary) / 0.2); */
   /* font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; */
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
 }

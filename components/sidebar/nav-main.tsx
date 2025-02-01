@@ -93,7 +93,7 @@ export function NavMain({
 }) {
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>CadenceNotes</SidebarGroupLabel>
+      <SidebarGroupLabel>Agilee</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <CollapsibleSection key={item.title} item={item} />
