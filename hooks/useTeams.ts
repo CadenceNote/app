@@ -1,129 +1,94 @@
-import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamApi } from '@/services/teamApi';
 import { Team, CreateTeamInput, UpdateTeamInput, AddTeamMemberInput } from '@/lib/types/team';
-import { useToast } from '@/hooks/use-toast';
+import { useUser } from './useUser';
+
+// Query keys
+export const teamKeys = {
+    all: ['teams'] as const,
+    lists: () => [...teamKeys.all, 'list'] as const,
+    list: (userId: number) => [...teamKeys.lists(), { userId }] as const,
+    details: () => [...teamKeys.all, 'detail'] as const,
+    detail: (id: number) => [...teamKeys.details(), id] as const,
+};
 
 export function useTeams() {
-    const [teams, setTeams] = useState<Team[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const { toast } = useToast();
+    const queryClient = useQueryClient();
+    const { user } = useUser();
 
-    const loadTeams = async () => {
-        try {
-            setIsLoading(true);
-            const data = await teamApi.getUserTeams();
-            setTeams(data);
-            setError(null);
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to load teams';
-            setError(message);
-            toast({
-                title: "Error",
-                description: message,
-                variant: "destructive"
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
-    const createTeam = async (data: CreateTeamInput) => {
-        try {
-            const newTeam = await teamApi.createTeam(data);
-            setTeams(prev => [...prev, newTeam]);
-            toast({
-                title: "Success",
-                description: "Team created successfully!"
-            });
-            return newTeam;
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to create team';
-            toast({
-                title: "Error",
-                description: message,
-                variant: "destructive"
-            });
-            throw err;
-        }
-    };
+    // Pre-fetch check of cached data
+    const cachedData = queryClient.getQueryData(teamKeys.list(user?.id as number));
 
-    const updateTeam = async (teamId: number, data: UpdateTeamInput) => {
-        try {
-            const updatedTeam = await teamApi.updateTeam(teamId, data);
-            setTeams(prev => prev.map(team =>
-                team.id === teamId ? updatedTeam : team
-            ));
-            toast({
-                title: "Success",
-                description: "Team updated successfully!"
-            });
-            return updatedTeam;
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to update team';
-            toast({
-                title: "Error",
-                description: message,
-                variant: "destructive"
-            });
-            throw err;
-        }
-    };
+    // Fetch teams query
+    const {
+        data: teams = [],
+        isLoading,
+        error,
+        isFetching,
+        isRefetching,
+    } = useQuery({
+        queryKey: teamKeys.list(user?.id as number),
+        queryFn: async () => {
+            const result = await teamApi.getUserTeams(user?.id as number);
+            return result;
+        },
+        enabled: !!user?.id,
+        staleTime: Infinity, // Never consider data stale automatically
+        gcTime: 24 * 60 * 60 * 1000, // Keep in cache for 24 hours
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        placeholderData: keepPreviousData => {
+            return keepPreviousData ?? [];
+        },
+    });
 
-    const deleteTeam = async (teamId: number) => {
-        try {
-            await teamApi.deleteTeam(teamId);
-            setTeams(prev => prev.filter(team => team.id !== teamId));
-            toast({
-                title: "Success",
-                description: "Team deleted successfully!"
-            });
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to delete team';
-            toast({
-                title: "Error",
-                description: message,
-                variant: "destructive"
-            });
-            throw err;
-        }
-    };
 
-    const addTeamMember = async (teamId: number, data: AddTeamMemberInput) => {
-        try {
-            const updatedTeam = await teamApi.addTeamMember(teamId, data);
-            setTeams(prev => prev.map(team =>
-                team.id === teamId ? updatedTeam : team
-            ));
-            toast({
-                title: "Success",
-                description: "Team member added successfully!"
-            });
-            return updatedTeam;
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to add team member';
-            toast({
-                title: "Error",
-                description: message,
-                variant: "destructive"
-            });
-            throw err;
-        }
-    };
+    // Create team mutation
+    const createTeam = useMutation({
+        mutationFn: (newTeam: CreateTeamInput) => teamApi.createTeam(newTeam),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
+        },
+    });
 
-    // Load teams on component mount
-    useEffect(() => {
-        loadTeams();
-    }, []);
+    // Update team mutation
+    const updateTeam = useMutation({
+        mutationFn: ({ teamId, data }: { teamId: number; data: UpdateTeamInput }) =>
+            teamApi.updateTeam(teamId, data),
+        onSuccess: (_, { teamId }) => {
+            queryClient.invalidateQueries({ queryKey: teamKeys.detail(teamId) });
+            queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
+        },
+    });
+
+    // Delete team mutation
+    const deleteTeam = useMutation({
+        mutationFn: (teamId: number) => teamApi.deleteTeam(teamId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
+        },
+    });
+
+    // Add team member mutation
+    const addTeamMember = useMutation({
+        mutationFn: ({ teamId, data }: { teamId: number; data: AddTeamMemberInput }) =>
+            teamApi.addTeamMember(teamId, data),
+        onSuccess: (_, { teamId }) => {
+            queryClient.invalidateQueries({ queryKey: teamKeys.detail(teamId) });
+            queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
+        },
+    });
 
     return {
         teams,
         isLoading,
+        isFetching,
         error,
-        loadTeams,
         createTeam,
         updateTeam,
         deleteTeam,
-        addTeamMember
+        addTeamMember,
     };
 }

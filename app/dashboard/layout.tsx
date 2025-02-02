@@ -1,9 +1,9 @@
-import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from '@/components/sidebar/app-sidebar';
+import { SidebarStateProvider } from '@/components/sidebar/sidebar-state-provider';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
-        <SidebarProvider>
+        <SidebarStateProvider>
             <div className="flex w-full h-screen overflow-hidden">
                 <AppSidebar className="shrink-0 bg-background/5" />
                 {/* Main Content */}
@@ -13,6 +13,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                 </main>
             </div>
-        </SidebarProvider>
+        </SidebarStateProvider>
     );
 }

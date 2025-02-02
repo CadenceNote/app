@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Home, Settings, LucideIcon } from "lucide-react"
+import { Home, Settings, LucideIcon, Building2 } from "lucide-react"
 import { usePathname } from 'next/navigation';
 import { NavMain } from "@/components/sidebar/nav-main"
 import { NavUser } from "@/components/sidebar/nav-user"
@@ -12,17 +12,12 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { useDashboard } from "@/contexts/DashboardContext";
-import { memo, useRef, useMemo, useCallback } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { defaultAvatarUrl } from "../common/DefaultAvatarSvg";
 import Logo from "../common/Logo";
-import { ProcessedTeamItem } from "@/contexts/DashboardContext";
-import { isEqual } from "lodash";
-
-// Deep comparison utility
-const areProcessedTeamsEqual = (a: ProcessedTeamItem[], b: ProcessedTeamItem[]) =>
-  a.length === b.length && a.every((item, i) => isEqual(item, b[i]));
+import { useTeams } from "@/hooks/useTeams";
+import { useUser } from "@/hooks/useUser";
 
 // Static nav items outside component
 const personalItems = [
@@ -33,21 +28,11 @@ const personalItems = [
   }
 ];
 
-const getSettingsItems = (teamId?: string | null) => [
+const getSettingsItems = () => [
   {
     title: "Settings",
-    url: teamId ? `/dashboard/${teamId}/settings` : "/dashboard/settings",
+    url: "/dashboard/settings",
     icon: Settings,
-    items: [
-      {
-        title: "Profile",
-        url: "/dashboard/profile",
-      },
-      ...(teamId ? [{
-        title: "Team Settings",
-        url: `/dashboard/${teamId}/settings`,
-      }] : []),
-    ],
   },
 ];
 
@@ -58,21 +43,14 @@ interface NavItem {
   items?: { title: string; url: string; }[];
 }
 
-interface NavData {
-  mySpace: NavItem[];
-  teamSpace: ProcessedTeamItem[];
-  others: NavItem[];
-  projects: NavItem[];
-}
-
-interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+interface AppSidebarProps {
   className?: string;
 }
 
 const calculateActiveStates = (items: NavItem[], pathname: string) =>
   items.map(item => ({
     ...item,
-    isActive: pathname.startsWith(item.url),
+    isActive: item.title === "My Dashboard" ? pathname === item.url : pathname.startsWith(item.url),
     items: item.items?.map((subItem) => ({
       ...subItem,
       isActive: pathname === subItem.url,
@@ -81,69 +59,61 @@ const calculateActiveStates = (items: NavItem[], pathname: string) =>
 
 export const AppSidebar = memo(function AppSidebar({ className }: AppSidebarProps) {
   const pathname = usePathname();
-  const { user, processedTeams, sidebarState, setSidebarState } = useDashboard();
-  const previousNavData = useRef<NavData | null>(null);
-  const processedTeamsRef = useRef(processedTeams);
+  const { user } = useUser();
+  const { teams } = useTeams();
 
-  // Deep memoization for nav data
-  const navData = useMemo(() => {
-    // If we have cached data and teams haven't changed, return cached data
-    if (previousNavData.current && areProcessedTeamsEqual(processedTeamsRef.current, processedTeams)) {
-      return previousNavData.current;
-    }
+  // Transform teams data for TeamSwitcher
+  const teamSwitcherData = useMemo(() => {
+    if (!teams?.length) return [];
 
-    // Create new nav data
-    const newNavData = {
-      mySpace: personalItems,
-      teamSpace: processedTeams || [],
-      others: getSettingsItems(null),
-      projects: [],
-    };
+    return teams.map(team => ({
+      id: team.id,
+      name: team.name,
+      logo: Building2,
+      plan: 'Free' // Default plan for now
+    }));
+  }, [teams]);
 
-    // Update refs
-    processedTeamsRef.current = processedTeams;
-    previousNavData.current = newNavData;
+  // Get current team from pathname
+  const getCurrentTeamId = useCallback((path: string) => {
+    const matches = path.match(/\/dashboard\/(\d+)/);
+    return matches ? Number(matches[1]) : null;
+  }, []);
 
-    return newNavData;
-  }, [processedTeams]);
+  const currentTeamId = getCurrentTeamId(pathname);
 
-  // Stable active state calculation
-  const navMainWithActive = useMemo(() => {
-    if (!navData) return { mySpace: [], teamSpace: [], others: [] };
-
-    return {
-      mySpace: calculateActiveStates(navData.mySpace, pathname),
-      teamSpace: calculateActiveStates(navData.teamSpace, pathname),
-      others: calculateActiveStates(navData.others, pathname),
-    };
-  }, [navData, pathname]);
-
-  // Handle sidebar state changes
-  const handleClick = useCallback(() => {
-    setSidebarState({
-      ...sidebarState,
-      isCollapsed: !sidebarState.isCollapsed
-    });
-  }, [sidebarState, setSidebarState]);
+  // Calculate active states
+  const navMainWithActive = {
+    mySpace: calculateActiveStates(personalItems, pathname),
+    others: calculateActiveStates(getSettingsItems(currentTeamId?.toString()), pathname),
+  };
 
   return (
     <Sidebar
       collapsible="icon"
       className={cn("transition-all duration-300", className)}
-      data-state={sidebarState.isCollapsed ? "collapsed" : "expanded"}
-      onClick={handleClick}
     >
       <SidebarHeader className="pl-3 pt-4">
         <Logo />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMainWithActive} />
+        <NavMain
+          items={{
+            mySpace: navMainWithActive.mySpace,
+            others: navMainWithActive.others,
+            teamSwitcher: {
+              teams: teamSwitcherData,
+              currentTeamId,
+              showTeamSpace: Boolean(currentTeamId)
+            }
+          }}
+        />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={{
-          name: user?.full_name || 'Unknown',
+          name: user?.email || 'Unknown',
           email: user?.email || '',
-          avatar: user?.avatar_url || defaultAvatarUrl
+          avatar: user?.user_metadata?.avatar_url || defaultAvatarUrl
         }} />
       </SidebarFooter>
       <SidebarRail />

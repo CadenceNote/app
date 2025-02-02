@@ -1,17 +1,12 @@
 "use client"
 
-import { ChevronRight, Ellipsis, type LucideIcon } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
-import { useState } from "react"
+import * as React from "react"
+import Link from "next/link"
+import { ChevronDown, Plus } from "lucide-react"
 
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import {
   SidebarGroup,
-  SidebarGroupAction,
+  SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
@@ -20,162 +15,160 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Button } from "../ui/button"
+import { TeamSwitcher } from "./team-switcher"
 
-function CollapsibleSection({ item }: {
-  item: {
-    title: string
-    url: string
-    icon?: LucideIcon
-    isActive?: boolean
-    items?: {
-      title: string
-      url: string
-    }[]
-  }
-}) {
-  const [isOpen, setIsOpen] = useState(item.isActive);
-
-  return (
-    <Collapsible
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      className="group/collapsible"
-    >
-      <CollapsibleTrigger asChild>
-        <SidebarMenuItem>
-          <SidebarMenuButton tooltip={item.title}>
-            {item.icon && <item.icon />}
-            <span>{item.title}</span>
-            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </CollapsibleTrigger>
-      <CollapsibleContent forceMount className="overflow-hidden">
-        <AnimatePresence initial={false}>
-          {isOpen && (
-            <motion.div
-              initial={{ height: 0 }}
-              animate={{ height: "auto" }}
-              exit={{ height: 0 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-            >
-              <SidebarMenuSub>
-                {item.items?.map((subItem) => (
-                  <SidebarMenuSubItem key={subItem.title}>
-                    <SidebarMenuSubButton asChild>
-                      <a href={subItem.url}>
-                        <span>{subItem.title}</span>
-                      </a>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                ))}
-              </SidebarMenuSub>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-export function NavMain({
-  items: {
-    mySpace,
-    teamSpace,
-    others
-  },
-}: {
+interface NavMainProps {
   items: {
     mySpace: {
       title: string
       url: string
-      icon?: LucideIcon
+      icon?: React.ElementType
       isActive?: boolean
       items?: {
         title: string
         url: string
-      }[]
-    }[]
-    teamSpace: {
-      title: string
-      url: string
-      icon?: LucideIcon
-      isActive?: boolean
-      items?: {
-        title: string
-        url: string
+        isActive?: boolean
       }[]
     }[]
     others: {
       title: string
       url: string
-      icon?: LucideIcon
+      icon?: React.ElementType
       isActive?: boolean
       items?: {
         title: string
         url: string
+        isActive?: boolean
       }[]
     }[]
+    teamSwitcher: {
+      teams: {
+        id: number
+        name: string
+        logo: React.ElementType
+        plan: string
+      }[]
+      currentTeamId: number | null
+      showTeamSpace: boolean
+    }
   }
-}) {
+}
+
+export function NavMain({ items }: NavMainProps) {
   return (
     <>
       <SidebarGroup>
-        <SidebarGroupLabel>My Space</SidebarGroupLabel>
-        <SidebarMenu>
-          {mySpace.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild tooltip={item.title}>
-                <a href={item.url}>
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
-                </a>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarGroup>
-
-      {teamSpace.length > 0 && (
-        <SidebarGroup>
-          <SidebarGroupLabel>Team Space <Button variant="ghost" size="icon" className="ml-auto w-4 h-4 p-0"><Ellipsis /></Button></SidebarGroupLabel>
+        <SidebarGroupLabel>Personal</SidebarGroupLabel>
+        <SidebarGroupContent>
           <SidebarMenu>
-            {teamSpace.map((item) => (
+            {items.mySpace.map((item) => (
               <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton asChild tooltip={item.title}>
-                  <a href={item.url}>
-                    {item.icon && <item.icon />}
-                    <span>{item.title}</span>
-                  </a>
-                </SidebarMenuButton>
+                {item.items ? (
+                  <>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={item.isActive}
+                      tooltip={item.title}
+                    >
+                      <Link href={item.url}>
+                        {item.icon && <item.icon />}
+                        <span>{item.title}</span>
+                        <ChevronDown className="ml-auto" />
+                      </Link>
+                    </SidebarMenuButton>
+                    <SidebarMenuSub>
+                      {item.items.map((subItem) => (
+                        <SidebarMenuSubItem key={subItem.title}>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={subItem.isActive}
+                          >
+                            <Link href={subItem.url}>{subItem.title}</Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </>
+                ) : (
+                  <SidebarMenuButton
+                    asChild
+                    isActive={item.isActive}
+                    tooltip={item.title}
+                  >
+                    <Link href={item.url}>
+                      {item.icon && <item.icon />}
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                )}
               </SidebarMenuItem>
             ))}
           </SidebarMenu>
-        </SidebarGroup>
-      )}
+        </SidebarGroupContent>
+      </SidebarGroup>
 
-      {others.length > 0 && (
-        <SidebarGroup>
-          <SidebarGroupLabel>Others</SidebarGroupLabel>
+      <SidebarGroup>
+        <SidebarGroupLabel>
+          Team Space
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+          <TeamSwitcher
+            teams={items.teamSwitcher.teams}
+            currentTeamId={items.teamSwitcher.currentTeamId}
+            variant="list"
+          />
+        </SidebarGroupContent>
+      </SidebarGroup>
+
+      <SidebarGroup>
+        <SidebarGroupLabel>Settings</SidebarGroupLabel>
+        <SidebarGroupContent>
           <SidebarMenu>
-            {others.map((item) => (
-              item.items ? (
-                <CollapsibleSection key={item.title} item={item} />
-              ) : (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={item.title}>
-                    <a href={item.url}>
+            {items.others.map((item) => (
+              <SidebarMenuItem key={item.title}>
+                {item.items ? (
+                  <>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={item.isActive}
+                      tooltip={item.title}
+                    >
+                      <Link href={item.url}>
+                        {item.icon && <item.icon />}
+                        <span>{item.title}</span>
+                        <ChevronDown className="ml-auto" />
+                      </Link>
+                    </SidebarMenuButton>
+                    <SidebarMenuSub>
+                      {item.items.map((subItem) => (
+                        <SidebarMenuSubItem key={subItem.title}>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={subItem.isActive}
+                          >
+                            <Link href={subItem.url}>{subItem.title}</Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </>
+                ) : (
+                  <SidebarMenuButton
+                    asChild
+                    isActive={item.isActive}
+                    tooltip={item.title}
+                  >
+                    <Link href={item.url}>
                       {item.icon && <item.icon />}
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
-                </SidebarMenuItem>
-              )
+                )}
+              </SidebarMenuItem>
             ))}
           </SidebarMenu>
-        </SidebarGroup>
-      )}
+        </SidebarGroupContent>
+      </SidebarGroup>
     </>
   )
 }
