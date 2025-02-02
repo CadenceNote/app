@@ -29,7 +29,7 @@ export function useUser() {
                     const userData: User = {
                         id: response.data.id,
                         email: response.data.email,
-                        full_name: response.data.full_name
+                        full_name: response.data.full_name,
                     };
                     setUser(userData);
                 }
