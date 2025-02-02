@@ -1,12 +1,11 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
-import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion"
+import { useEffect, useRef } from "react"
+import { motion, useScroll, useTransform } from "framer-motion"
 import Layout from "@/components/Layout"
-import { supabase } from "@/lib/supabase"
-import type { User } from "@/lib/types/auth"
-import { ArrowRight, Calendar, Users, Zap, MousePointer, Check } from "lucide-react"
+import { ArrowRight, Calendar, Users, Zap, MousePointer } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useUser } from "@/hooks/useUser"
 
 const AnimatedBackground = () => (
   <div className="absolute inset-0 overflow-hidden">
@@ -49,34 +48,43 @@ const AnimatedText = ({ children }) => (
   </motion.span>
 )
 
-const FloatingIcons = () => (
-  <div className="absolute inset-0 pointer-events-none">
-    {[Calendar, Users, Zap, MousePointer].map((Icon, index) => (
-      <motion.div
-        key={index}
-        className="absolute"
-        style={{
-          top: `${Math.random() * 100}%`,
-          left: `${Math.random() * 100}%`,
-        }}
-        animate={{
-          y: [0, -20, 0],
-          rotate: [0, 360],
-        }}
-        transition={{
-          duration: Math.random() * 5 + 5,
-          repeat: Number.POSITIVE_INFINITY,
-          repeatType: "reverse",
-        }}
-      >
-        <Icon className="h-8 w-8 text-gray-100/50" />
-      </motion.div>
-    ))}
-  </div>
-)
+const FloatingIcons = () => {
+  const iconPositions = [
+    { top: "20%", left: "15%" },
+    { top: "40%", left: "75%" },
+    { top: "70%", left: "25%" },
+    { top: "30%", left: "60%" }
+  ]
+
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {[Calendar, Users, Zap, MousePointer].map((Icon, index) => (
+        <motion.div
+          key={index}
+          className="absolute"
+          style={{
+            top: iconPositions[index].top,
+            left: iconPositions[index].left,
+          }}
+          animate={{
+            y: [0, -20, 0],
+            rotate: [0, 360],
+          }}
+          transition={{
+            duration: 5 + index,
+            repeat: Number.POSITIVE_INFINITY,
+            repeatType: "reverse",
+          }}
+        >
+          <Icon className="h-8 w-8 text-gray-100/50" />
+        </motion.div>
+      ))}
+    </div>
+  )
+}
 
 export default function Home() {
-  const [user, setUser] = useState<User | null>(null)
+  const { user, isLoading } = useUser()
   const containerRef = useRef(null)
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -85,25 +93,6 @@ export default function Home() {
 
   const backgroundY = useTransform(scrollYProgress, [0, 1], ["0%", "100%"])
   const textY = useTransform(scrollYProgress, [0, 1], ["0%", "100%"])
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      setUser(session?.user || null)
-    }
-
-    checkUser()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null)
-    })
-
-    return () => subscription?.unsubscribe()
-  }, [])
 
   return (
     <Layout>
@@ -121,13 +110,14 @@ export default function Home() {
               Revolutionize Your
               <br />
               <span className="bg-gradient-to-br from-red-300 to-orange-300 text-transparent bg-clip-text">
-                Agile Meetings
+                Agile Workflows
               </span>
             </h1>
           </AnimatedText>
+
           <AnimatedText>
             <p className="text-xl md:text-2xl mb-12 max-w-2xl text-gray-100">
-              Capture decisions, track actions, and streamline team flow.
+              Capture decisions, track actions, and streamline team workflow.
             </p>
           </AnimatedText>
           <motion.div
@@ -136,7 +126,7 @@ export default function Home() {
             transition={{ delay: 0.5 }}
             className="flex flex-col sm:flex-row gap-4"
           >
-            {!user ? (
+            {isLoading ? null : !user ? (
               <>
                 <Button size="lg" variant="default" asChild>
                   <a href="/signup" className="group">
@@ -285,7 +275,6 @@ export default function Home() {
           </Button>
         </div>
       </section>
-
 
     </Layout>
   )
