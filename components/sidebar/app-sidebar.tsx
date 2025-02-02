@@ -1,22 +1,10 @@
 "use client"
 
 import * as React from "react"
-import {
-  Home,
-  BarChart2,
-  Layout,
-  Calendar,
-  Users,
-  Settings,
-  Command,
-  Building2,
-  ListTodo,
-} from "lucide-react"
+import { Home, Settings, LucideIcon } from "lucide-react"
 import { usePathname } from 'next/navigation';
 import { NavMain } from "@/components/sidebar/nav-main"
-import { NavProjects } from "@/components/sidebar/nav-projects"
 import { NavUser } from "@/components/sidebar/nav-user"
-import { TeamSwitcher } from "@/components/sidebar/team-switcher"
 import {
   Sidebar,
   SidebarContent,
@@ -25,72 +13,27 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useDashboard } from "@/contexts/DashboardContext";
-import { memo } from "react";
+import { memo, useRef, useMemo, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { defaultAvatarUrl } from "../common/DefaultAvatarSvg";
+import Logo from "../common/Logo";
+import { ProcessedTeamItem } from "@/contexts/DashboardContext";
+import { isEqual } from "lodash";
 
-// Move this outside component to prevent recreation
-const getPersonalItems = () => [
+// Deep comparison utility
+const areProcessedTeamsEqual = (a: ProcessedTeamItem[], b: ProcessedTeamItem[]) =>
+  a.length === b.length && a.every((item, i) => isEqual(item, b[i]));
+
+// Static nav items outside component
+const personalItems = [
   {
     title: "My Dashboard",
     url: "/dashboard",
     icon: Home,
-    items: [
-      {
-        title: "Main Dashboard",
-        url: "/dashboard",
-      },
-      {
-        title: "My Meetings",
-        url: "/dashboard/my-meetings",
-      },
-      {
-        title: "My Tasks",
-        url: "/dashboard/my-tasks",
-      },
-      {
-        title: "My Reports",
-        url: "/dashboard/my-reports",
-      },
-      {
-        title: "My Teams",
-        url: "/dashboard/my-teams",
-      },
-    ],
-  },
+  }
 ];
 
-const getTeamItems = (teamId: string) => [
-  {
-    title: "Team Space",
-    url: `/dashboard/${teamId}`,
-    icon: Users,
-    items: [
-      {
-        title: "Overview",
-        url: `/dashboard/${teamId}`,
-      },
-      {
-        title: "Meetings",
-        url: `/dashboard/${teamId}/meetings`,
-      },
-      {
-        title: "Tasks",
-        url: `/dashboard/${teamId}/tasks`,
-      },
-      {
-        title: "Reports",
-        url: `/dashboard/${teamId}/reports`,
-      },
-      {
-        title: "Members",
-        url: `/dashboard/${teamId}/members`,
-      },
-    ],
-  },
-];
-
-const getSettingsItems = (teamId: string | undefined | null) => [
+const getSettingsItems = (teamId?: string | null) => [
   {
     title: "Settings",
     url: teamId ? `/dashboard/${teamId}/settings` : "/dashboard/settings",
@@ -108,121 +51,99 @@ const getSettingsItems = (teamId: string | undefined | null) => [
   },
 ];
 
-export const AppSidebar = memo(function AppSidebar({ className, ...props }: React.ComponentProps<typeof Sidebar>) {
-  const pathname = usePathname();
-  const { user, teams: allTeams } = useDashboard();
+interface NavItem {
+  title: string;
+  url: string;
+  icon?: LucideIcon;
+  items?: { title: string; url: string; }[];
+}
 
-  // Get current team ID from URL if we're in a team context
-  const teamId = React.useMemo(() => {
-    const segments = pathname.split('/');
-    const dashboardIndex = segments.indexOf('dashboard');
-    if (dashboardIndex === -1) return undefined;
-    const possibleTeamId = segments[dashboardIndex + 1];
-    return possibleTeamId && !isNaN(Number(possibleTeamId)) ? possibleTeamId : undefined;
-  }, [pathname]);
+interface NavData {
+  mySpace: NavItem[];
+  teamSpace: ProcessedTeamItem[];
+  others: NavItem[];
+  projects: NavItem[];
+}
 
-  const isTeamContext = Boolean(teamId);
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  className?: string;
+}
 
-  // Cache team names for quick lookup
-
-
-
-
-  // Memoize teams list items
-  const teamsListItems = React.useMemo(() => !isTeamContext ? [
-    {
-      title: "Team Space",
-      url: "/dashboard/teams",
-      icon: Building2,
-      items: [
-        ...allTeams.slice(0, 5).map(team => ({
-          title: team.name,
-          url: `/dashboard/${team.id}`,
-        })),
-        ...(allTeams.length > 5 ? [{
-          title: "View All Teams",
-          url: "/dashboard",
-        }] : []),
-      ],
-    },
-  ] : [], [allTeams, isTeamContext]);
-
-  // Memoize navigation data
-  const navData = React.useMemo(() => ({
-    navMain: [
-      ...getPersonalItems(),
-      ...teamsListItems,
-      ...(teamId ? getTeamItems(teamId) : []),
-      ...getSettingsItems(teamId),
-    ],
-    projects: isTeamContext ? [
-      {
-        name: "Daily Standup",
-        url: `/dashboard/${teamId}/meetings/daily-standup`,
-        icon: Calendar,
-      },
-      {
-        name: "Sprint Planning",
-        url: `/dashboard/${teamId}/meetings/sprint-planning`,
-        icon: Layout,
-      },
-      {
-        name: "Retrospective",
-        url: `/dashboard/${teamId}/meetings/retrospective`,
-        icon: BarChart2,
-      },
-    ] : [],
-  }), [teamId, teamsListItems, isTeamContext]);
-
-  // Memoize active states
-  const navMainWithActive = React.useMemo(() => ({
-    ...navData,
-    navMain: navData.navMain.map(section => ({
-      ...section,
-      isActive: pathname.startsWith(section.url),
-      items: section.items?.map(item => ({
-        ...item,
-        isActive: pathname === item.url,
-      })),
-    })),
-  }), [navData, pathname]);
-
-  // Memoize TeamSwitcher data
-  const teamSwitcherData = React.useMemo(() => [
-    {
-      id: 0,
-      name: "Personal",
-      plan: "Free",
-      logo: Command
-    },
-    ...allTeams.slice(0, 5).map(team => ({
-      id: team.id,
-      name: team.name,
-      plan: "Free",
-      logo: Command
+const calculateActiveStates = (items: NavItem[], pathname: string) =>
+  items.map(item => ({
+    ...item,
+    isActive: pathname.startsWith(item.url),
+    items: item.items?.map((subItem) => ({
+      ...subItem,
+      isActive: pathname === subItem.url,
     }))
-  ], [allTeams]);
+  }));
+
+export const AppSidebar = memo(function AppSidebar({ className }: AppSidebarProps) {
+  const pathname = usePathname();
+  const { user, processedTeams, sidebarState, setSidebarState } = useDashboard();
+  const previousNavData = useRef<NavData | null>(null);
+  const processedTeamsRef = useRef(processedTeams);
+
+  // Deep memoization for nav data
+  const navData = useMemo(() => {
+    // If we have cached data and teams haven't changed, return cached data
+    if (previousNavData.current && areProcessedTeamsEqual(processedTeamsRef.current, processedTeams)) {
+      return previousNavData.current;
+    }
+
+    // Create new nav data
+    const newNavData = {
+      mySpace: personalItems,
+      teamSpace: processedTeams || [],
+      others: getSettingsItems(null),
+      projects: [],
+    };
+
+    // Update refs
+    processedTeamsRef.current = processedTeams;
+    previousNavData.current = newNavData;
+
+    return newNavData;
+  }, [processedTeams]);
+
+  // Stable active state calculation
+  const navMainWithActive = useMemo(() => {
+    if (!navData) return { mySpace: [], teamSpace: [], others: [] };
+
+    return {
+      mySpace: calculateActiveStates(navData.mySpace, pathname),
+      teamSpace: calculateActiveStates(navData.teamSpace, pathname),
+      others: calculateActiveStates(navData.others, pathname),
+    };
+  }, [navData, pathname]);
+
+  // Handle sidebar state changes
+  const handleClick = useCallback(() => {
+    setSidebarState({
+      ...sidebarState,
+      isCollapsed: !sidebarState.isCollapsed
+    });
+  }, [sidebarState, setSidebarState]);
 
   return (
-    <Sidebar collapsible="icon" className={cn("transition-all duration-300", className)} {...props}>
-      <SidebarHeader>
-        <TeamSwitcher teams={teamSwitcherData} />
+    <Sidebar
+      collapsible="icon"
+      className={cn("transition-all duration-300", className)}
+      data-state={sidebarState.isCollapsed ? "collapsed" : "expanded"}
+      onClick={handleClick}
+    >
+      <SidebarHeader className="pl-3 pt-4">
+        <Logo />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMainWithActive.navMain} />
-        {navData.projects.length > 0 && (
-          <NavProjects projects={navData.projects} />
-        )}
+        <NavMain items={navMainWithActive} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={user ? {
-          name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-          email: user.email || '',
-          avatar: defaultAvatarUrl
-        } : {
-          name: 'Loading...',
-          email: '',
-          avatar: defaultAvatarUrl
+        <NavUser user={{
+          name: user?.full_name || 'Unknown',
+          email: user?.email || '',
+          avatar: user?.avatar_url || defaultAvatarUrl
         }} />
       </SidebarFooter>
       <SidebarRail />

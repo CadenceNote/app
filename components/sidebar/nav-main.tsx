@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronRight, type LucideIcon } from "lucide-react"
+import { ChevronRight, Ellipsis, type LucideIcon } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useState } from "react"
 
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/collapsible"
 import {
   SidebarGroup,
+  SidebarGroupAction,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
@@ -19,6 +20,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
+import { Button } from "../ui/button"
 
 function CollapsibleSection({ item }: {
   item: {
@@ -78,27 +80,102 @@ function CollapsibleSection({ item }: {
 }
 
 export function NavMain({
-  items,
+  items: {
+    mySpace,
+    teamSpace,
+    others
+  },
 }: {
   items: {
-    title: string
-    url: string
-    icon?: LucideIcon
-    isActive?: boolean
-    items?: {
+    mySpace: {
       title: string
       url: string
+      icon?: LucideIcon
+      isActive?: boolean
+      items?: {
+        title: string
+        url: string
+      }[]
     }[]
-  }[]
+    teamSpace: {
+      title: string
+      url: string
+      icon?: LucideIcon
+      isActive?: boolean
+      items?: {
+        title: string
+        url: string
+      }[]
+    }[]
+    others: {
+      title: string
+      url: string
+      icon?: LucideIcon
+      isActive?: boolean
+      items?: {
+        title: string
+        url: string
+      }[]
+    }[]
+  }
 }) {
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel>Agilee</SidebarGroupLabel>
-      <SidebarMenu>
-        {items.map((item) => (
-          <CollapsibleSection key={item.title} item={item} />
-        ))}
-      </SidebarMenu>
-    </SidebarGroup>
+    <>
+      <SidebarGroup>
+        <SidebarGroupLabel>My Space</SidebarGroupLabel>
+        <SidebarMenu>
+          {mySpace.map((item) => (
+            <SidebarMenuItem key={item.title}>
+              <SidebarMenuButton asChild tooltip={item.title}>
+                <a href={item.url}>
+                  {item.icon && <item.icon />}
+                  <span>{item.title}</span>
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroup>
+
+      {teamSpace.length > 0 && (
+        <SidebarGroup>
+          <SidebarGroupLabel>Team Space <Button variant="ghost" size="icon" className="ml-auto w-4 h-4 p-0"><Ellipsis /></Button></SidebarGroupLabel>
+          <SidebarMenu>
+            {teamSpace.map((item) => (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton asChild tooltip={item.title}>
+                  <a href={item.url}>
+                    {item.icon && <item.icon />}
+                    <span>{item.title}</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
+      )}
+
+      {others.length > 0 && (
+        <SidebarGroup>
+          <SidebarGroupLabel>Others</SidebarGroupLabel>
+          <SidebarMenu>
+            {others.map((item) => (
+              item.items ? (
+                <CollapsibleSection key={item.title} item={item} />
+              ) : (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild tooltip={item.title}>
+                    <a href={item.url}>
+                      {item.icon && <item.icon />}
+                      <span>{item.title}</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
+      )}
+    </>
   )
 }
