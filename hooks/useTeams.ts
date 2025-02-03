@@ -48,8 +48,11 @@ export function useTeams() {
     // Create team mutation
     const createTeam = useMutation({
         mutationFn: (newTeam: CreateTeamInput) => teamApi.createTeam(newTeam),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
+        onSuccess: async () => {
+            // Invalidate and refetch teams list
+            await queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
+            // Force an immediate refetch
+            await queryClient.refetchQueries({ queryKey: teamKeys.lists() });
         },
     });
 

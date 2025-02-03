@@ -7,13 +7,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
     Plus, Bell, CalendarIcon, CheckCircle, Clock,
     MoreHorizontal, Settings, Trash2, X, AtSign, Check,
-    AlertCircle, BarChart2, Users
+    AlertCircle, BarChart2, Users,
+
 } from 'lucide-react';
 import { CreateMeetingModal } from '@/components/meetings/CreateMeetingModal';
 import { TaskDetail } from '@/components/tasks/TaskDetail';
@@ -28,6 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Notification, NotificationTitle, NotificationDescription } from "@/components/ui/notification";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Bird } from '@/components/common/Bird';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -191,6 +193,7 @@ const MeetingItem = ({ meeting, onDelete }: { meeting: Meeting; onDelete: (id: s
 
 export default function TeamDashboardPage() {
     const params = useParams();
+    const router = useRouter();
     const teamId = parseInt(params.teamId as string);
     const [isMounted, setIsMounted] = useState(false);
     const { user } = useUser();
@@ -402,6 +405,10 @@ export default function TeamDashboardPage() {
 
     const calculatedStats = calculateStats();
 
+    const navigateToSettings = () => {
+        router.push(`/dashboard/${teamId}/settings`);
+    };
+
     return (
         <div className="flex h-screen overflow-hidden">
             {/* Sidebar */}
@@ -527,7 +534,11 @@ export default function TeamDashboardPage() {
                                     <span className="text-muted-foreground">Time Tracking</span>
                                 </div>
                             </Button>
-                            <Button variant="ghost" className="w-full justify-start opacity-70 hover:opacity-100">
+                            <Button
+                                variant="ghost"
+                                className="w-full justify-start opacity-70 hover:opacity-100"
+                                onClick={navigateToSettings}
+                            >
                                 <div className="flex items-center gap-3">
                                     <Settings className="h-4 w-4 text-muted-foreground" />
                                     <span className="text-muted-foreground">Settings</span>
@@ -623,21 +634,7 @@ export default function TeamDashboardPage() {
                                         </CardHeader>
                                         <CardContent className="relative">
                                             {/* Bird Container */}
-                                            <div className="absolute left-1 -top-50 w-24 h-24 transform -rotate-12">
-                                                {/* Bird Body */}
-                                                <div className="relative w-16 h-16">
-                                                    {/* Bird Body */}
-                                                    <div className="absolute w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-indigo-500"></div>
-                                                    {/* Bird Eye */}
-                                                    <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-white">
-                                                        <div className="absolute top-1 right-1 w-1 h-1 rounded-full bg-black"></div>
-                                                    </div>
-                                                    {/* Bird Beak */}
-                                                    <div className="absolute top-6 -right-2 w-4 h-4 transform rotate-45 bg-yellow-400"></div>
-                                                    {/* Bird Wing */}
-                                                    <div className="absolute bottom-2 left-2 w-8 h-8 rounded-full bg-gradient-to-br from-green-600 to-indigo-600 transform -rotate-45"></div>
-                                                </div>
-                                            </div>
+                                            <Bird />
                                             {/* Speech Bubble */}
                                             <div className="relative ml-16 p-4 bg-gradient-to-br from-green-50 to-indigo-50 rounded-2xl">
                                                 {/* Speech Bubble Pointer */}

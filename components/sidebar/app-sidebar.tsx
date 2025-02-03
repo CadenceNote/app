@@ -116,7 +116,8 @@ export const AppSidebar = memo(function AppSidebar({ className }: AppSidebarProp
           avatar: user?.user_metadata?.avatar_url || defaultAvatarUrl
         }} />
       </SidebarFooter>
-      <SidebarRail />
+      <SidebarRail className="hover:after:bg-gradient-to-b from-indigo-500/50 to-green-500/50" />
     </Sidebar>
   );
 });
+
