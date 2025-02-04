@@ -93,111 +93,12 @@ interface Team {
     members: any[];
 }
 
-// Mock data for charts
-const taskCompletionData = [
-    { name: "Mon", completed: 3, total: 5 },
-    { name: "Tue", completed: 5, total: 8 },
-    { name: "Wed", completed: 7, total: 10 },
-    { name: "Thu", completed: 4, total: 6 },
-    { name: "Fri", completed: 6, total: 9 },
-];
-
-const projectProgressData = [
-    { name: "Week 1", actual: 20, expected: 25 },
-    { name: "Week 2", actual: 40, expected: 50 },
-    { name: "Week 3", actual: 65, expected: 75 },
-    { name: "Week 4", actual: 90, expected: 100 },
-];
-
-const TaskItem = ({ task, onDelete }: { task: Task; onDelete: (id: string) => void }) => {
-    return (
-        <div className="flex items-center space-x-4 p-3 rounded-lg border hover:bg-accent">
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                    <span className={cn(
-                        "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
-                        task.tag === "Feature" && "bg-purple-50 text-purple-700 ring-purple-600/20",
-                        task.tag === "Bug" && "bg-red-50 text-red-700 ring-red-600/20",
-                        task.tag === "Documentation" && "bg-blue-50 text-blue-700 ring-blue-600/20"
-                    )}>
-                        {task.tag}
-                    </span>
-                    <span className="font-medium truncate">{task.title}</span>
-                    <span className={cn(
-                        "text-xs px-2 py-1 rounded-full",
-                        task.status === "Done" && "bg-green-100 text-green-800",
-                        task.status === "In Progress" && "bg-blue-100 text-blue-800",
-                        task.status === "To Do" && "bg-yellow-100 text-yellow-800"
-                    )}>
-                        {task.status}
-                    </span>
-                    <span className={cn(
-                        "text-xs px-2 py-1 rounded-full",
-                        task.priority === "High" && "bg-red-100 text-red-800",
-                        task.priority === "Medium" && "bg-orange-100 text-orange-800",
-                        task.priority === "Low" && "bg-green-100 text-green-800"
-                    )}>
-                        {task.priority}
-                    </span>
-                </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                    Due: {new Date(task.dueDate).toLocaleDateString()}
-                </div>
-            </div>
-            <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onDelete(task.id)}
-            >
-                <Trash2 className="h-4 w-4" />
-            </Button>
-        </div>
-    );
-};
-
-const MeetingItem = ({ meeting, onDelete }: { meeting: Meeting; onDelete: (id: string) => void }) => {
-    return (
-        <div className="flex items-center space-x-4 p-3 rounded-lg border hover:bg-accent">
-            <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{meeting.title}</p>
-                <p className="text-sm text-muted-foreground">
-                    {new Date(meeting.date).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric'
-                    })} at {meeting.time}
-                </p>
-            </div>
-            <div className="flex -space-x-2">
-                {meeting.attendees.slice(0, 3).map((attendee, i) => (
-                    <Avatar key={i} className="border-2 border-background h-8 w-8">
-                        <AvatarFallback>{attendee.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                    </Avatar>
-                ))}
-                {meeting.attendees.length > 3 && (
-                    <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-sm">
-                        +{meeting.attendees.length - 3}
-                    </div>
-                )}
-            </div>
-            <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onDelete(meeting.id)}
-            >
-                <Trash2 className="h-4 w-4" />
-            </Button>
-        </div>
-    );
-};
-
 export default function TeamDashboardPage() {
     const params = useParams();
     const router = useRouter();
     const teamId = parseInt(params.teamId as string);
     const [isMounted, setIsMounted] = useState(false);
     const { user } = useUser();
-    const [date, setDate] = useState<Date | undefined>(undefined);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
