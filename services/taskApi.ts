@@ -1,31 +1,31 @@
-import api from './api';
 import { Task, TaskStatus, TaskPriority, TaskType, TimeUnit, Comment } from '@/lib/types/task';
+
+// Initialize Supabase client
+import { supabase } from '@/lib/supabase';
 
 export interface CreateTaskInput {
     title: string;
-    description: string;
+    description?: string;
     status: TaskStatus;
     priority: TaskPriority;
     type: TaskType;
     start_date?: string;
     due_date?: string;
-    assignee_id?: number;
-    labels: number[];
+    assignee_id?: string;
+    parent_id?: number;
+    order_index?: number;
     category?: string;
+    labels?: number[];
+    task_metadata?: any;
     team?: {
         id: number;
         name: string;
-    };
-    time_tracking: {
-        original_estimate: number;
-        remaining_estimate: number;
-        unit: TimeUnit;
     };
 }
 
 export interface TaskFilters {
     status?: TaskStatus[];
-    assignee_id?: number;
+    assignee_id?: string;
     search?: string;
     parent_id?: number;
     skip?: number;
@@ -35,76 +35,407 @@ export interface TaskFilters {
 export const taskApi = {
     // List tasks with filters
     listTasks: async (teamId: number, filters?: TaskFilters): Promise<Task[]> => {
-        const params = new URLSearchParams();
-        if (filters?.status) {
-            filters.status.forEach(s => params.append('status', s));
+        let query = supabase
+            .from('tasks')
+            .select(`
+                *,
+                assignee:assignee_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                ),
+                created_by:created_by_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                ),
+                parent:parent_id(*),
+                watchers:task_watchers!task_id(
+                    user:user_id(
+                        supabase_uid,
+                        email,
+                        full_name
+                    )
+                ),
+                comments:task_comments!task_id(
+                    id,
+                    content,
+                    created_at,
+                    updated_at,
+                    parent_id,
+                    user:user_id(
+                        supabase_uid,
+                        email,
+                        full_name
+                    )
+                )
+            `)
+            .eq('team_id', teamId)
+            .order('order_index', { ascending: true });
+
+        // Apply filters
+        if (filters?.status?.length) {
+            query = query.in('status', filters.status);
         }
         if (filters?.assignee_id) {
-            params.append('assignee_id', filters.assignee_id.toString());
+            query = query.eq('assignee_id', filters.assignee_id);
         }
         if (filters?.search) {
-            params.append('search', filters.search);
+            query = query.ilike('title', `%${filters.search}%`);
         }
         if (filters?.parent_id) {
-            params.append('parent_id', filters.parent_id.toString());
+            query = query.eq('parent_id', filters.parent_id);
         }
-        if (filters?.skip) {
-            params.append('skip', filters.skip.toString());
-        }
-        if (filters?.limit) {
-            params.append('limit', filters.limit.toString());
+        if (filters?.skip && filters?.limit) {
+            query = query.range(filters.skip, filters.skip + filters.limit - 1);
         }
 
-        const response = await api.get(`/teams/${teamId}/tasks/?${params.toString()}`);
-        return response.data.tasks;
+        const { data, error } = await query;
+        if (error) throw error;
+
+        // Transform the response to use supabase_uid as id
+        return data.map(task => ({
+            ...task,
+            assignee: task.assignee ? {
+                id: task.assignee.supabase_uid,
+                email: task.assignee.email,
+                full_name: task.assignee.full_name
+            } : null,
+            created_by: {
+                id: task.created_by.supabase_uid,
+                email: task.created_by.email,
+                full_name: task.created_by.full_name
+            },
+            watchers: task.watchers.map(w => ({
+                id: w.user.supabase_uid,
+                email: w.user.email,
+                full_name: w.user.full_name
+            })),
+            comments: task.comments.map(c => ({
+                ...c,
+                user: {
+                    id: c.user.supabase_uid,
+                    email: c.user.email,
+                    full_name: c.user.full_name
+                }
+            }))
+        }));
     },
 
     // Get a single task
     getTask: async (teamId: number, taskId: number): Promise<Task> => {
-        const response = await api.get(`/teams/${teamId}/tasks/${taskId}/`);
-        return response.data;
+        const { data, error } = await supabase
+            .from('tasks')
+            .select(`
+                *,
+                assignee:assignee_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                ),
+                created_by:created_by_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                ),
+                parent:parent_id(*),
+                watchers:task_watchers!task_id(
+                    user:user_id(
+                        supabase_uid,
+                        email,
+                        full_name
+                    )
+                ),
+                comments:task_comments!task_id(
+                    id,
+                    content,
+                    created_at,
+                    updated_at,
+                    parent_id,
+                    user:user_id(
+                        supabase_uid,
+                        email,
+                        full_name
+                    )
+                )
+            `)
+            .eq('team_id', teamId)
+            .eq('id', taskId)
+            .single();
+
+        if (error) throw error;
+
+        // Transform the response to use supabase_uid as id
+        return {
+            ...data,
+            assignee: data.assignee ? {
+                id: data.assignee.supabase_uid,
+                email: data.assignee.email,
+                full_name: data.assignee.full_name
+            } : null,
+            created_by: {
+                id: data.created_by.supabase_uid,
+                email: data.created_by.email,
+                full_name: data.created_by.full_name
+            },
+            watchers: data.watchers.map(w => ({
+                id: w.user.supabase_uid,
+                email: w.user.email,
+                full_name: w.user.full_name
+            })),
+            comments: data.comments.map(c => ({
+                ...c,
+                user: {
+                    id: c.user.supabase_uid,
+                    email: c.user.email,
+                    full_name: c.user.full_name
+                }
+            }))
+        };
     },
 
     // Create a new task
     createTask: async (teamId: number, data: CreateTaskInput): Promise<Task> => {
-        const formattedData = {
+        const { data: maxRefNumber } = await supabase
+            .from('tasks')
+            .select('team_ref_number')
+            .eq('team_id', teamId)
+            .order('team_ref_number', { ascending: false })
+            .limit(1)
+            .single();
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const taskData = {
             ...data,
-            status: data.status || TaskStatus.TODO
+            team_id: teamId,
+            team_ref_number: (maxRefNumber?.team_ref_number || 0) + 1,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            created_by_id: user.id,
+            status: data.status || TaskStatus.TODO,
+            type: data.type || TaskType.TASK
         };
-        const response = await api.post(`/teams/${teamId}/tasks/create/`, formattedData);
-        return response.data;
+
+        // First create the task
+        const { data: task, error: taskError } = await supabase
+            .from('tasks')
+            .insert([taskData])
+            .select(`
+                *,
+                assignee:assignee_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                ),
+                created_by:created_by_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                )
+            `)
+            .single();
+
+        if (taskError) throw taskError;
+
+        // Then create the label associations if any
+        if (data.labels?.length) {
+            const labelAssociations = data.labels.map(labelId => ({
+                task_id: task.id,
+                label_id: labelId
+            }));
+
+            const { error: labelError } = await supabase
+                .from('task_labels')
+                .insert(labelAssociations);
+
+            if (labelError) throw labelError;
+        }
+
+        // Transform the response to use supabase_uid as id
+        return {
+            ...task,
+            assignee: task.assignee ? {
+                id: task.assignee.supabase_uid,
+                email: task.assignee.email,
+                full_name: task.assignee.full_name
+            } : null,
+            created_by: {
+                id: task.created_by.supabase_uid,
+                email: task.created_by.email,
+                full_name: task.created_by.full_name
+            }
+        };
     },
 
     // Update a task
     updateTask: async (teamId: number, taskId: number, data: Partial<CreateTaskInput>): Promise<Task> => {
-        const response = await api.put(`/teams/${teamId}/tasks/${taskId}/`, data);
-        return response.data;
+        // Create a copy of data without labels to update the task
+        const { labels: _labels, ...taskUpdateData } = data;
+
+        const updateData = {
+            ...taskUpdateData,
+            updated_at: new Date().toISOString()
+        };
+
+        // Get current task state for history
+        const { data: oldTask } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('id', taskId)
+            .single();
+
+        // Update task
+        const { error: taskError } = await supabase
+            .from('tasks')
+            .update(updateData)
+            .eq('id', taskId)
+            .eq('team_id', teamId);
+
+
+        if (taskError) throw taskError;
+
+        // Create history records
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const changes = [];
+        for (const [key, newValue] of Object.entries(updateData)) {
+            if (oldTask && oldTask[key] !== newValue) {
+                changes.push({
+                    task_id: taskId,
+                    user_id: user.id,
+                    field_name: key,
+                    old_value: oldTask[key]?.toString(),
+                    new_value: newValue?.toString(),
+                    change_type: 'UPDATE',
+                    created_at: new Date().toISOString()
+                });
+            }
+        }
+
+        if (changes.length > 0) {
+            const { error: historyError } = await supabase
+                .from('task_history')
+                .insert(changes);
+
+            if (historyError) throw historyError;
+        }
+        const { data: updatedTask } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('id', taskId)
+            .single();
+        // Return updated task
+        return updatedTask as Task;
     },
+
 
     // Delete a task
     deleteTask: async (teamId: number, taskId: number): Promise<void> => {
-        await api.delete(`/teams/${teamId}/tasks/${taskId}/`, {
-            data: { user_id: 1 } // TODO: Get actual user ID from auth context
-        });
-    },
+        // First, delete related task comments
+        const { error: commentsError } = await supabase
+            .from('task_comments')
+            .delete()
+            .eq('task_id', taskId);
 
-    // Update task order
-    updateTaskOrder: async (teamId: number, taskId: number, newIndex: number): Promise<Task> => {
-        const response = await api.post(`/teams/${teamId}/tasks/${taskId}/order/`, {
-            new_index: newIndex
-        });
-        return response.data;
+        if (commentsError) throw commentsError;
+
+        // Then, delete related task history records
+        const { error: historyError } = await supabase
+            .from('task_history')
+            .delete()
+            .eq('task_id', taskId);
+
+        if (historyError) throw historyError;
+
+        // Finally delete the task
+        const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .eq('id', taskId)
+            .eq('team_id', teamId);
+
+        if (error) throw error;
     },
 
     // Add a comment to a task
-    addComment: async (teamId: number, taskId: number, data: { content: string, parent_id?: number }): Promise<Comment> => {
-        const response = await api.post(`/teams/${teamId}/tasks/${taskId}/comments/add/`, data);
-        return response.data;
+    addComment: async (teamId: number, taskId: number, content: string, parentId?: number): Promise<Comment> => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const { data: comment, error } = await supabase
+            .from('task_comments')
+            .insert({
+                task_id: taskId,
+                user_id: user.id,
+                content,
+                parent_id: parentId,
+                created_at: new Date().toISOString()
+            })
+            .select(`
+                *,
+                user:user_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                )
+            `)
+            .single();
+
+        if (error) throw error;
+
+        return {
+            ...comment,
+            user: {
+                id: comment.user.supabase_uid,
+                email: comment.user.email,
+                full_name: comment.user.full_name
+            }
+        };
     },
 
-    // Get task comments
-    getComments: async (teamId: number, taskId: number): Promise<Comment[]> => {
-        const response = await api.get(`/teams/${teamId}/tasks/${taskId}/comments/`);
-        return response.data.comments;
+    // Update a comment
+    updateComment: async (teamId: number, taskId: number, commentId: number, content: string): Promise<Comment> => {
+        const { data: comment, error } = await supabase
+            .from('task_comments')
+            .update({
+                content,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', commentId)
+            .eq('task_id', taskId)
+            .select(`
+                *,
+                user:user_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                )
+            `)
+            .single();
+
+        if (error) throw error;
+
+        return {
+            ...comment,
+            user: {
+                id: comment.user.supabase_uid,
+                email: comment.user.email,
+                full_name: comment.user.full_name
+            }
+        };
+    },
+
+    // Delete a comment
+    deleteComment: async (teamId: number, taskId: number, commentId: number): Promise<void> => {
+        const { error } = await supabase
+            .from('task_comments')
+            .delete()
+            .eq('id', commentId)
+            .eq('task_id', taskId);
+
+        if (error) throw error;
     }
 }; 

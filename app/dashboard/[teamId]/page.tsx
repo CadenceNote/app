@@ -14,7 +14,6 @@ import {
     Plus, Bell, CalendarIcon, CheckCircle, Clock,
     MoreHorizontal, Settings, Trash2, X, AtSign, Check,
     AlertCircle, BarChart2, Users,
-
 } from 'lucide-react';
 import { CreateMeetingModal } from '@/components/meetings/CreateMeetingModal';
 import { TaskDetail } from '@/components/tasks/TaskDetail';
@@ -42,17 +41,29 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useUser } from "@/hooks/useUser";
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from "@/components/ui/table";
+import { TaskStatus, TaskPriority, TaskType } from '@/lib/types/task';
+import { useToast } from "@/hooks/use-toast";
 
 interface Task {
     id: string;
     taskId: string;
     title: string;
-    tag: 'Feature' | 'Bug' | 'Documentation';
-    status: 'To Do' | 'In Progress' | 'Done' | 'Backlog' | 'Canceled';
-    dueDate: string;
-    priority: 'High' | 'Medium' | 'Low';
-    importance: 'important' | 'normal';
-    urgency: 'urgent' | 'not-urgent';
+    description?: string;
+    type: TaskType;
+    status: TaskStatus;
+    due_date?: string;
+    priority: TaskPriority;
+    team?: number;
+    assignee?: { id: number; name: string };
+    labels: { id: number; name: string }[];
+    category?: string;
+    team_ref_number?: string;
+    comments?: Array<{
+        id: number;
+        content: string;
+        user: { full_name: string };
+        created_at: string;
+    }>;
 }
 
 interface Meeting {
@@ -62,6 +73,7 @@ interface Meeting {
     date: string;
     attendees: string[];
     isImportant: boolean;
+    start_time: string;
 }
 
 interface Alert {
@@ -90,7 +102,7 @@ interface DashboardStats {
 
 interface Team {
     name: string;
-    members: any[];
+    members: { id: number; name: string }[];
 }
 
 export default function TeamDashboardPage() {
@@ -116,6 +128,9 @@ export default function TeamDashboardPage() {
     const [activeMeeting, setActiveMeeting] = useState<Meeting | null>(null);
     const [activeSection, setActiveSection] = useState('summary-section');
     const [team, setTeam] = useState<Team | null>(null);
+    const [selectedTask, setSelectedTask] = useState<Task | undefined>(undefined);
+    const [isTaskDetailOpen, setIsTaskDetailOpen] = useState(false);
+    const { toast } = useToast();
 
     useEffect(() => {
         setIsMounted(true);
@@ -136,7 +151,10 @@ export default function TeamDashboardPage() {
             try {
                 // Get team data
                 const teamData = await teamApi.getTeam(teamId);
-                setTeam(teamData);
+                setTeam({
+                    name: teamData.name,
+                    members: teamData.members?.map(m => ({ id: m.id, name: m.name })) || []
+                });
 
                 // Get all meetings and filter upcoming ones
                 const meetingsData = await meetingApi.listMeetings(teamId);
@@ -145,28 +163,15 @@ export default function TeamDashboardPage() {
                     title: m.title,
                     time: new Date(m.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     date: new Date(m.start_time).toISOString().split('T')[0],
-                    attendees: m.attendees?.map(a => a.name) || [],
-                    isImportant: m.is_important || false
+                    attendees: m.attendees || [],
+                    isImportant: m.is_important || false,
+                    start_time: m.start_time
                 })) || [];
                 setMeetings(formattedMeetings);
 
                 // Get all tasks
                 const tasksData = await taskApi.listTasks(teamId);
-                const formattedTasks = tasksData?.map(t => ({
-                    id: t.id.toString(),
-                    taskId: `TASK-${t.id}`,
-                    title: t.title,
-                    tag: t.type as Task['tag'],
-                    status: t.status as Task['status'],
-                    dueDate: t.due_date ? new Date(t.due_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                    priority: t.priority as Task['priority'],
-                    importance: 'normal' as const,
-                    urgency: 'not-urgent' as const
-                })) || [];
-                setTasks(formattedTasks);
-
-                // Get team members
-                const members = teamData?.members || [];
+                setTasks(tasksData || []);
 
                 // Calculate stats
                 const now = new Date();
@@ -182,16 +187,16 @@ export default function TeamDashboardPage() {
                         }).length || 0
                     },
                     tasks: {
-                        active: tasksData?.filter(t => t.status !== 'DONE').length || 0,
+                        active: tasksData?.filter(t => t.status !== TaskStatus.DONE).length || 0,
                         dueThisWeek: tasksData?.filter(t =>
-                            t.status !== 'DONE' &&
+                            t.status !== TaskStatus.DONE &&
                             t.due_date &&
                             new Date(t.due_date) <= weekEnd
                         ).length || 0
                     },
                     team: {
-                        total: members.length,
-                        active: members.filter(m => m.role === 'member').length
+                        total: teamData.members?.length || 0,
+                        active: teamData.members?.filter(m => m.role === 'member').length || 0
                     }
                 });
             } catch (error) {
@@ -226,10 +231,6 @@ export default function TeamDashboardPage() {
         };
     }, []);
 
-    const addTask = (newTask: Omit<Task, 'id' | 'quadrant'>) => {
-        setTasks(prev => [...prev, { ...newTask, id: (prev.length + 1).toString(), quadrant: 'unsorted' }]);
-        addNotification(`New task added: ${newTask.title}`, "Task has been successfully added to your list.");
-    };
 
     const addMeeting = (newMeeting: Omit<Meeting, 'id' | 'isImportant'>) => {
         setMeetings(prev => [...prev, { ...newMeeting, id: (prev.length + 1).toString(), isImportant: false }]);
@@ -237,16 +238,6 @@ export default function TeamDashboardPage() {
             `New meeting scheduled: ${newMeeting.title}`,
             `Meeting scheduled for ${newMeeting.date} at ${newMeeting.time}`
         );
-    };
-
-    const deleteTask = (id: string) => {
-        setTasks(prev => prev.filter(task => task.id !== id));
-        addNotification("Task deleted", "The task has been removed from your list.");
-    };
-
-    const deleteMeeting = (id: string) => {
-        setMeetings(prev => prev.filter(meeting => meeting.id !== id));
-        addNotification("Meeting cancelled", "The meeting has been removed from your schedule.");
     };
 
     const addNotification = (title: string, description: string) => {
@@ -308,6 +299,53 @@ export default function TeamDashboardPage() {
 
     const navigateToSettings = () => {
         router.push(`/dashboard/${teamId}/settings`);
+    };
+
+    const handleTaskUpdate = async (updatedTask: Task) => {
+        if (!updatedTask.id) {
+            // This is a new task
+            setTasks(prev => [...prev, {
+                ...updatedTask,
+                taskId: `T-${updatedTask.team_ref_number || updatedTask.id}`,
+                labels: updatedTask.labels || []
+            }]);
+            toast({
+                title: "Task created",
+                description: "The new task has been created successfully."
+            });
+        } else {
+            // This is an update to an existing task
+            setTasks(prev => prev.map(t =>
+                t.id === updatedTask.id ? {
+                    ...updatedTask,
+                    taskId: `T-${updatedTask.team_ref_number || updatedTask.id}`,
+                    labels: updatedTask.labels || []
+                } : t
+            ));
+            toast({
+                title: "Task updated",
+                description: "The task has been updated successfully."
+            });
+        }
+
+        // Refresh the task list to ensure we have the latest data
+        try {
+            const tasksData = await taskApi.listTasks(teamId);
+            if (tasksData) {
+                setTasks(tasksData.map(t => ({
+                    ...t,
+                    taskId: `T-${t.team_ref_number || t.id}`,
+                    labels: t.labels || []
+                })));
+            }
+        } catch (error) {
+            console.error('Failed to refresh tasks:', error);
+            toast({
+                title: "Error",
+                description: "Failed to refresh tasks. Please try again.",
+                variant: "destructive"
+            });
+        }
     };
 
     return (
@@ -862,162 +900,132 @@ export default function TeamDashboardPage() {
                             <div className="relative z-10">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-blue-500 bg-clip-text text-transparent">Tasks</h2>
-                                    <Sheet>
-                                        <SheetTrigger asChild>
-                                            <Button size="sm">
-                                                <Plus className="mr-2 h-4 w-4" /> Add Task
-                                            </Button>
-                                        </SheetTrigger>
-                                        <SheetContent>
-                                            <SheetHeader>
-                                                <SheetTitle>Add New Task</SheetTitle>
-                                                <SheetDescription>Fill in the details to add a new task to your list.</SheetDescription>
-                                            </SheetHeader>
-                                            <form
-                                                onSubmit={(e) => {
-                                                    e.preventDefault()
-                                                    const formData = new FormData(e.currentTarget)
-                                                    addTask({
-                                                        taskId: `TASK-${Math.floor(Math.random() * 10000)}`,
-                                                        title: formData.get("title") as string,
-                                                        tag: formData.get("tag") as Task['tag'],
-                                                        status: formData.get("status") as Task['status'],
-                                                        dueDate: formData.get("dueDate") as string,
-                                                        priority: formData.get("priority") as Task['priority'],
-                                                        importance: "normal",
-                                                        urgency: "not-urgent"
-                                                    })
-                                                    e.currentTarget.reset()
-                                                }}
-                                                className="space-y-4 mt-4"
-                                            >
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="title">Title</Label>
-                                                    <Input id="title" name="title" required />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="tag">Type</Label>
-                                                    <Select name="tag" defaultValue="Feature">
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select type" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="Feature">Feature</SelectItem>
-                                                            <SelectItem value="Bug">Bug</SelectItem>
-                                                            <SelectItem value="Documentation">Documentation</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="status">Status</Label>
-                                                    <Select name="status" defaultValue="To Do">
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select status" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="To Do">To Do</SelectItem>
-                                                            <SelectItem value="In Progress">In Progress</SelectItem>
-                                                            <SelectItem value="Done">Done</SelectItem>
-                                                            <SelectItem value="Backlog">Backlog</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="dueDate">Due Date</Label>
-                                                    <Input id="dueDate" name="dueDate" type="date" required />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="priority">Priority</Label>
-                                                    <Select name="priority" defaultValue="Medium">
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select priority" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="Low">Low</SelectItem>
-                                                            <SelectItem value="Medium">Medium</SelectItem>
-                                                            <SelectItem value="High">High</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <Button type="submit">Add Task</Button>
-                                            </form>
-                                        </SheetContent>
-                                    </Sheet>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => {
+                                            setSelectedTask(undefined);
+                                            setIsTaskDetailOpen(true);
+                                        }}
+                                    >
+                                        <Plus className="mr-2 h-4 w-4" /> Add Task
+                                    </Button>
                                 </div>
 
                                 <div className="rounded-md border">
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead className="w-[100px] text-xs">Task</TableHead>
+                                                <TableHead className="w-[100px] text-xs">Task ID</TableHead>
                                                 <TableHead className="text-xs">Title</TableHead>
+                                                <TableHead className="w-[100px] text-xs">Type</TableHead>
                                                 <TableHead className="w-[100px] text-xs">Status</TableHead>
-                                                <TableHead className="w-[100px] text-xs">Importance</TableHead>
-                                                <TableHead className="w-[100px] text-xs">Urgency</TableHead>
-                                                <TableHead className="w-[100px] text-xs">Due Date</TableHead>
+                                                <TableHead className="w-[100px] text-xs">Priority</TableHead>
+                                                <TableHead className="w-[150px] text-xs">Assignee</TableHead>
+                                                <TableHead className="w-[120px] text-xs">Due Date</TableHead>
+                                                <TableHead className="w-[120px] text-xs">Created</TableHead>
                                                 <TableHead className="w-[50px]"></TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {filteredTasks.map((task) => (
-                                                <TableRow key={task.id}>
-                                                    <TableCell className="font-medium text-sm text-muted-foreground">{task.taskId}</TableCell>
+                                                <TableRow
+                                                    key={task.id}
+                                                    className="cursor-pointer hover:bg-accent/50"
+                                                    onClick={() => {
+                                                        setSelectedTask(task);
+                                                        setIsTaskDetailOpen(true);
+                                                    }}
+                                                >
+                                                    <TableCell className="font-medium text-sm text-muted-foreground">
+                                                        {task.team_ref_number ? `T-${task.team_ref_number}` : task.id}
+                                                    </TableCell>
                                                     <TableCell className="font-medium text-sm text-foreground/90">
-                                                        <div className="flex items-center gap-2">
-                                                            <span
-                                                                className={cn(
-                                                                    "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
-                                                                    task.tag === "Feature" && "bg-purple-50 text-purple-700 ring-purple-600/20",
-                                                                    task.tag === "Bug" && "bg-red-50 text-red-700 ring-red-600/20",
-                                                                    task.tag === "Documentation" && "bg-blue-50 text-blue-700 ring-blue-600/20"
-                                                                )}
-                                                            >
-                                                                {task.tag}
-                                                            </span>
-                                                            {task.title}
+                                                        <div className="flex flex-col gap-1">
+                                                            <span>{task.title}</span>
+                                                            {task.description && (
+                                                                <span className="text-xs text-muted-foreground line-clamp-1">
+                                                                    {task.description}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <span
-                                                            className={cn(
-                                                                "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium",
-                                                                task.status === "Done" && "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20",
-                                                                task.status === "In Progress" && "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20",
-                                                                task.status === "To Do" && "bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20",
-                                                                task.status === "Backlog" && "bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20",
-                                                                task.status === "Canceled" && "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20"
-                                                            )}
-                                                        >
+                                                        <span className={cn(
+                                                            "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
+                                                            task.type === TaskType.FEATURE && "bg-purple-50 text-purple-700 ring-purple-600/20",
+                                                            task.type === TaskType.BUG && "bg-red-50 text-red-700 ring-red-600/20",
+                                                            task.type === TaskType.IMPROVEMENT && "bg-blue-50 text-blue-700 ring-blue-600/20",
+                                                            task.type === TaskType.TASK && "bg-gray-50 text-gray-700 ring-gray-600/20"
+                                                        )}>
+                                                            {task.type}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className={cn(
+                                                            "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
+                                                            task.status === TaskStatus.DONE && "bg-green-50 text-green-700 ring-green-600/20",
+                                                            task.status === TaskStatus.IN_PROGRESS && "bg-blue-50 text-blue-700 ring-blue-600/20",
+                                                            task.status === TaskStatus.TODO && "bg-yellow-50 text-yellow-700 ring-yellow-600/20",
+                                                            task.status === TaskStatus.BLOCKED && "bg-red-50 text-red-700 ring-red-600/20",
+                                                            task.status === TaskStatus.CANCELLED && "bg-gray-50 text-gray-700 ring-gray-600/20"
+                                                        )}>
                                                             {task.status}
                                                         </span>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <span
-                                                            className={cn(
-                                                                "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
-                                                                task.importance === "important" && "bg-red-50 text-red-700 ring-red-600/20",
-                                                                task.importance === "normal" && "bg-gray-50 text-gray-700 ring-gray-600/20"
-                                                            )}
-                                                        >
-                                                            {task.importance}
+                                                        <span className={cn(
+                                                            "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
+                                                            task.priority === TaskPriority.HIGH && "bg-red-50 text-red-700 ring-red-600/20",
+                                                            task.priority === TaskPriority.MEDIUM && "bg-yellow-50 text-yellow-700 ring-yellow-600/20",
+                                                            task.priority === TaskPriority.LOW && "bg-green-50 text-green-700 ring-green-600/20",
+                                                            task.priority === TaskPriority.URGENT && "bg-purple-50 text-purple-700 ring-purple-600/20"
+                                                        )}>
+                                                            {task.priority}
                                                         </span>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <span
-                                                            className={cn(
-                                                                "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
-                                                                task.urgency === "urgent" && "bg-red-50 text-red-700 ring-red-600/20",
-                                                                task.urgency === "not-urgent" && "bg-gray-50 text-gray-700 ring-gray-600/20"
-                                                            )}
-                                                        >
-                                                            {task.urgency}
-                                                        </span>
+                                                        {task.assignee ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <Avatar className="h-6 w-6">
+                                                                    <AvatarFallback>{task.assignee.full_name?.charAt(0) || task.assignee.email.charAt(0)}</AvatarFallback>
+                                                                </Avatar>
+                                                                <span className="text-sm">{task.assignee.full_name || task.assignee.email}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-sm text-muted-foreground">Unassigned</span>
+                                                        )}
                                                     </TableCell>
-                                                    <TableCell>{task.dueDate}</TableCell>
+                                                    <TableCell>
+                                                        {task.due_date ? (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-sm">
+                                                                    {new Date(task.due_date).toLocaleDateString()}
+                                                                </span>
+                                                                {task.completed_at && (
+                                                                    <span className="text-xs text-green-600">
+                                                                        Completed {new Date(task.completed_at).toLocaleDateString()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ) : '-'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex flex-col text-xs">
+                                                            <span>{new Date(task.created_at).toLocaleDateString()}</span>
+                                                            <span className="text-muted-foreground">
+                                                                by {task.created_by?.full_name || task.created_by?.email}
+                                                            </span>
+                                                        </div>
+                                                    </TableCell>
+
                                                     <TableCell>
                                                         <DropdownMenu>
                                                             <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    className="h-8 w-8 p-0"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
                                                                     <span className="sr-only">Open menu</span>
                                                                     <MoreHorizontal className="h-4 w-4" />
                                                                 </Button>
@@ -1025,13 +1033,53 @@ export default function TeamDashboardPage() {
                                                             <DropdownMenuContent align="end">
                                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                                 <DropdownMenuItem
-                                                                    onClick={() => navigator.clipboard.writeText(task.taskId)}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        navigator.clipboard.writeText(task.team_ref_number ? `T-${task.team_ref_number}` : task.id.toString());
+                                                                    }}
                                                                 >
                                                                     Copy task ID
                                                                 </DropdownMenuItem>
                                                                 <DropdownMenuSeparator />
-                                                                <DropdownMenuItem>View task details</DropdownMenuItem>
-                                                                <DropdownMenuItem>View task history</DropdownMenuItem>
+                                                                <DropdownMenuItem onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedTask(task);
+                                                                    setIsTaskDetailOpen(true);
+                                                                }}>
+                                                                    View task details
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    className="text-red-600"
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+                                                                        try {
+                                                                            await taskApi.deleteTask(teamId, parseInt(task.id));
+                                                                            // Refresh tasks list
+                                                                            const tasksData = await taskApi.listTasks(teamId);
+                                                                            setTasks(tasksData || []);
+                                                                            toast({
+                                                                                title: "Task deleted",
+                                                                                description: `Task ${task.team_ref_number ? `T-${task.team_ref_number}` : task.id} has been deleted.`
+                                                                            });
+                                                                        } catch (error: any) {
+                                                                            console.error('Failed to delete task:', error);
+                                                                            let errorMessage = "Failed to delete task. Please try again.";
+
+                                                                            // Handle specific error cases
+                                                                            if (error.code === '23503') {
+                                                                                errorMessage = "Cannot delete task because it has related history records. Please contact support if this persists.";
+                                                                            }
+
+                                                                            toast({
+                                                                                title: "Error",
+                                                                                description: errorMessage,
+                                                                                variant: "destructive"
+                                                                            });
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    Delete task
+                                                                </DropdownMenuItem>
                                                             </DropdownMenuContent>
                                                         </DropdownMenu>
                                                     </TableCell>
@@ -1213,10 +1261,11 @@ export default function TeamDashboardPage() {
             />
 
             <TaskDetail
-                isOpen={isCreateTaskModalOpen}
-                onClose={() => setIsCreateTaskModalOpen(false)}
+                isOpen={isTaskDetailOpen}
+                onClose={() => setIsTaskDetailOpen(false)}
                 teamId={teamId}
-                task={undefined}
+                task={selectedTask}
+                onTaskUpdate={handleTaskUpdate}
             />
         </div>
     );

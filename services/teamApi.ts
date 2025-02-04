@@ -1,8 +1,7 @@
-import api from './api';
 import { Team, CreateTeamInput, UpdateTeamInput, AddTeamMemberInput, TeamRole } from '@/lib/types/team';
-
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/hooks/useUser';
+
 interface TeamMemberFromDB {
     id: string;
     team_id: number;
@@ -10,7 +9,7 @@ interface TeamMemberFromDB {
     role: string;
     created_at: string;
     users: {
-        id: string;
+        supabase_uid: string;
         email: string;
         full_name: string;
     };
@@ -18,14 +17,14 @@ interface TeamMemberFromDB {
 
 export const teamApi = {
     // Get all teams for the current user
-    getUserTeams: async (userId: number): Promise<Team[]> => {
-
-        if (!userId) return [];
+    getUserTeams: async (): Promise<Team[]> => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return [];
 
         const { data: teamMemberships, error: membershipError } = await supabase
             .from('team_members')
             .select('team_id')
-            .eq('user_id', userId)
+            .eq('user_id', user.id)
             .order('created_at', { ascending: false });
 
         if (membershipError) {
@@ -60,7 +59,7 @@ export const teamApi = {
                     role,
                     created_at,
                     users(
-                        id,
+                        supabase_uid,
                         email,
                         full_name
                     )
@@ -81,7 +80,7 @@ export const teamApi = {
                 role: member.role,
                 created_at: member.created_at,
                 user: {
-                    id: member.users.id,
+                    id: member.users.supabase_uid,
                     email: member.users.email,
                     full_name: member.users.full_name
                 }
@@ -92,7 +91,10 @@ export const teamApi = {
     },
 
     // Create a new team
-    createTeam: async (data: CreateTeamInput & { userId: string }): Promise<Team> => {
+    createTeam: async (data: CreateTeamInput): Promise<Team> => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
         const { data: newTeam, error } = await supabase
             .from('teams')
             .insert({
@@ -111,7 +113,7 @@ export const teamApi = {
             .from('team_members')
             .insert({
                 team_id: newTeam.id,
-                user_id: data.userId,
+                user_id: user.id,
                 role: 'ADMIN'
             });
 
@@ -122,36 +124,78 @@ export const teamApi = {
 
     // Update a team
     updateTeam: async (teamId: number, data: UpdateTeamInput): Promise<Team> => {
-        const response = await api.put(`/teams/${teamId}/update/`, data);
-        return response.data;
+        const { data: updated, error } = await supabase
+            .from('teams')
+            .update({
+                name: data.name,
+                description: data.description,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', teamId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return updated;
     },
 
-    // Delete a team
+    // Delete a team (soft delete)
     deleteTeam: async (teamId: number): Promise<void> => {
-        await supabase.from('teams').update({ is_active: false }).eq('id', teamId);
+        const { error } = await supabase
+            .from('teams')
+            .update({ is_active: false })
+            .eq('id', teamId);
+
+        if (error) throw error;
     },
 
     // Add a member to a team
-    addTeamMember: async (teamId: number, data: AddTeamMemberInput): Promise<Team> => {
-        // Format the role to uppercase for the backend enum
-        const formattedData = {
-            ...data,
-            role: data.role?.toUpperCase() || 'MEMBER'
-        };
-        const response = await api.post(`/teams/${teamId}/members/`, formattedData);
-        return response.data;
+    addTeamMember: async (teamId: number, data: AddTeamMemberInput): Promise<void> => {
+        const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('supabase_uid')
+            .eq('email', data.email)
+            .single();
+
+        if (userError || !userData) {
+            throw new Error('User not found');
+        }
+
+        const { error } = await supabase
+            .from('team_members')
+            .insert({
+                team_id: teamId,
+                user_id: userData.supabase_uid,
+                role: data.role?.toUpperCase() || 'MEMBER'
+            });
+
+        if (error) throw error;
     },
 
     // Get team member role
     getTeamMemberRole: async (teamId: number): Promise<{ role: TeamRole }> => {
-        const response = await api.get(`/teams/${teamId}/member-role/`);
-        return response.data;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        const { data: teamMember, error } = await supabase
+            .from('team_members')
+            .select('role')
+            .eq('team_id', teamId)
+            .eq('user_id', user.id)
+            .single();
+
+        if (error) throw error;
+        return { role: teamMember.role as TeamRole };
     },
+
     getTeamNames: async (): Promise<{ team_names: string[] }> => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { team_names: [] };
+
         const { data: teamMemberships, error: membershipError } = await supabase
             .from('team_members')
             .select('team_id')
-            .eq('user_id', (await supabase.auth.getUser()).data.user?.id);
+            .eq('user_id', user.id);
 
         if (membershipError) {
             throw membershipError;
@@ -170,14 +214,13 @@ export const teamApi = {
         }
 
         const teamNames = teams?.map(team => team.name) || [];
-
         return { team_names: teamNames };
     },
 
-    async inviteMember(teamId: number, email: string, role: 'ADMIN' | 'MEETING_MANAGER' | 'MEMBER') {
+    async inviteMember(teamId: number, email: string, role: TeamRole): Promise<void> {
         const { data: userData, error: userError } = await supabase
             .from('users')
-            .select('id')
+            .select('supabase_uid')
             .eq('email', email)
             .single();
 
@@ -189,14 +232,14 @@ export const teamApi = {
             .from('team_members')
             .insert({
                 team_id: teamId,
-                user_id: userData.id,
+                user_id: userData.supabase_uid,
                 role: role
             });
 
         if (error) throw error;
     },
 
-    async removeMember(teamId: number, memberId: string) {
+    async removeMember(teamId: number, memberId: string): Promise<void> {
         const { error } = await supabase
             .from('team_members')
             .delete()
@@ -206,7 +249,7 @@ export const teamApi = {
         if (error) throw error;
     },
 
-    async updateMemberRole(teamId: number, memberId: string, role: 'ADMIN' | 'MEETING_MANAGER' | 'MEMBER') {
+    async updateMemberRole(teamId: number, memberId: string, role: TeamRole): Promise<void> {
         const { error } = await supabase
             .from('team_members')
             .update({ role })

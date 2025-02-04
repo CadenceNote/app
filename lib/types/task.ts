@@ -2,7 +2,8 @@ export enum TaskStatus {
     TODO = 'TODO',
     IN_PROGRESS = 'IN_PROGRESS',
     DONE = 'DONE',
-    BLOCKED = 'BLOCKED'
+    BLOCKED = 'BLOCKED',
+    CANCELLED = 'CANCELLED'
 }
 
 export enum TaskPriority {
@@ -61,56 +62,66 @@ export interface TimeTracking {
     entries: TimeEntry[]
 }
 
+export interface Label {
+    id: number;
+    name: string;
+    color: string;
+    team_id: number;
+}
+
+export interface TaskLabel {
+    task_id: number;
+    label_id: number;
+    label: Label;
+}
+
+export interface User {
+    id: number;
+    supabase_uid: string;
+    email: string;
+    full_name: string | null;
+    is_active: boolean | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
 export interface Comment {
-    id: number
-    content: string
-    created_at: string
-    user: {
-        id: number
-        full_name: string
-        email: string
-    }
-    parent_id: number | null
+    id: number;
+    content: string;
+    task_id: number;
+    user_id: number;
+    parent_id?: number;
+    created_at: string;
+    updated_at?: string;
+    user: User;
+    replies?: Comment[];
 }
 
 export interface Task {
-    id: number
-    team_ref_number: string
-    title: string
-    description: string
-    status: TaskStatus
-    priority: TaskPriority
-    type: TaskType
-    assignee: {
-        id: number
-        full_name: string
-        email: string
-    } | null
-    reporter: {
-        id: number
-        full_name: string
-        email: string
-    } | null
-    due_date: string | null
-    start_date: string | null
-    completed_at: string | null
-    created_at: string
-    updated_at: string
-    time_tracking: TimeTracking
-    parent_id: number | null
-    order_index: number
-    category: string | null
-    labels: Array<{
-        id: number
-        name: string
-        color: string
-    }>
-    team: {
-        id: number
-        name: string
-    }
-    metadata: Record<string, unknown>
-    comments: Comment[]
+    id: number;
+    title: string;
+    description?: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    type: TaskType;
+    team_id: number;
+    team_ref_number: number;
+    parent_id?: number;
+    order_index?: number;
+    assignee_id?: number;
+    created_by_id: number;
+    start_date?: string;
+    due_date?: string;
+    completed_at?: string;
+    created_at: string;
+    updated_at?: string;
+    category?: string;
+    task_metadata?: Record<string, unknown>;
+    parent?: Task;
+    assignee?: User;
+    created_by: User;
+    labels?: TaskLabel[];
+    comments?: Comment[];
 }
 
 export interface CreateTaskInput {

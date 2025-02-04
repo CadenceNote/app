@@ -19,10 +19,13 @@ export default function SignUpForm() {
 
         try {
             await auth.signup(email, password, fullName);
-            // Redirect to home page instead of dashboard
             router.push('/dashboard');
-        } catch (err: any) {
-            setError(err.response?.data?.error || err.message || 'An error occurred during signup');
+        } catch (err: Error | unknown) {
+            if (err instanceof Error) {
+                setError(err.message);
+            } else {
+                setError('An error occurred during signup');
+            }
         } finally {
             setLoading(false);
         }

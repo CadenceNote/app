@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import api from '@/services/api';
 
 interface User {
-    id: number;
+    id: string;  // Changed to string for UUID
     email: string;
     full_name: string;
 }
@@ -22,16 +21,23 @@ export function useUser() {
                     return;
                 }
 
-                // If session exists, get user data from our backend
+                // If session exists, get user data directly from Supabase
                 if (session.user) {
-                    // Fetch user data from our backend which will map Supabase UID to internal ID
-                    const response = await api.get('/users/me/');
-                    const userData: User = {
-                        id: response.data.id,
-                        email: response.data.email,
-                        full_name: response.data.full_name,
-                    };
-                    setUser(userData);
+                    const { data: userData, error } = await supabase
+                        .from('users')
+                        .select('supabase_uid, email, full_name')
+                        .eq('supabase_uid', session.user.id)
+                        .single();
+
+                    if (error) throw error;
+
+                    if (userData) {
+                        setUser({
+                            id: userData.supabase_uid,
+                            email: userData.email,
+                            full_name: userData.full_name,
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Failed to load user:', error);
