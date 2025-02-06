@@ -32,6 +32,12 @@ export interface TaskFilters {
     limit?: number;
 }
 
+export interface PersonalTaskPreference {
+    importance: boolean;
+    urgency: boolean;
+    quadrant: Task['quadrant'];
+}
+
 export const taskApi = {
     // List tasks with filters
     listTasks: async (teamId: number, filters?: TaskFilters): Promise<Task[]> => {
@@ -435,6 +441,49 @@ export const taskApi = {
             .delete()
             .eq('id', commentId)
             .eq('task_id', taskId);
+
+        if (error) throw error;
+    },
+
+    // Get personal preferences for a task
+    getPersonalPreferences: async (taskId: number): Promise<PersonalTaskPreference> => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        const { data, error } = await supabase
+            .from('personal_task_preferences')
+            .select('*')
+            .eq('task_id', taskId)
+            .eq('user_id', user.id)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error;
+
+        return data || {
+            importance: false,
+            urgency: false,
+            quadrant: 'unsorted'
+        };
+    },
+
+    // Update personal preferences for a task
+    updatePersonalPreferences: async (taskId: number, preferences: PersonalTaskPreference): Promise<void> => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        const { error } = await supabase
+            .from('personal_task_preferences')
+            .upsert({
+                task_id: taskId,
+                user_id: user.id,
+                importance: preferences.importance,
+                urgency: preferences.urgency,
+                quadrant: preferences.quadrant,
+                updated_at: new Date().toISOString()
+            }, {
+                onConflict: 'task_id,user_id',  // Specify the unique constraint
+                ignoreDuplicates: false  // We want to update existing records
+            });
 
         if (error) throw error;
     }
