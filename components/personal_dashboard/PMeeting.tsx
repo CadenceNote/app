@@ -13,6 +13,7 @@ import { verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { teamApi } from '@/services/teamApi'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../ui/select"
 import { meetingApi } from '@/services/meetingApi'
+import { UserAvatar } from "@/components/common/UserAvatar"
 
 export default function PMeeting({ meetings, setMeetings, searchTerm }: { meetings: Meeting[], setMeetings: (meetings: Meeting[]) => void, searchTerm: string }) {
     const [activeMeeting, setActiveMeeting] = useState<Meeting | null>(null);

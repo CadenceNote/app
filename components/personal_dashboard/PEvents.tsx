@@ -4,6 +4,7 @@ import { Card, CardContent, CardTitle, CardHeader } from "../ui/card"
 import { Avatar, AvatarFallback } from "../ui/avatar"
 import { cn } from "@/lib/utils"
 import { Calendar } from "../ui/calendar"
+import { UserAvatar } from "@/components/common/UserAvatar"
 
 
 export default function PEvents({ meetings, tasks, date, setDate }) {
@@ -49,9 +50,11 @@ export default function PEvents({ meetings, tasks, date, setDate }) {
 
                                                 <div className="flex -space-x-2">
                                                     {meeting.attendees.slice(0, 3).map((attendee, i) => (
-                                                        <Avatar key={i} className="border-2 border-background h-8 w-8">
-                                                            <AvatarFallback>{attendee.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                                                        </Avatar>
+                                                        <UserAvatar
+                                                            key={i}
+                                                            name={attendee}
+                                                            className="h-8 w-8 border-2 border-background"
+                                                        />
                                                     ))}
                                                     {meeting.attendees.length > 3 && (
                                                         <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-sm">
@@ -128,9 +131,11 @@ export default function PEvents({ meetings, tasks, date, setDate }) {
                                                 </div>
                                                 <div className="flex -space-x-2">
                                                     {meeting.attendees.slice(0, 3).map((attendee, i) => (
-                                                        <Avatar key={i} className="border-2 border-background h-8 w-8">
-                                                            <AvatarFallback>{attendee.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                                                        </Avatar>
+                                                        <UserAvatar
+                                                            key={i}
+                                                            name={attendee}
+                                                            className="h-8 w-8 border-2 border-background"
+                                                        />
                                                     ))}
                                                     {meeting.attendees.length > 3 && (
                                                         <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-sm">
@@ -356,9 +361,11 @@ export default function PEvents({ meetings, tasks, date, setDate }) {
                                                         <span className="text-xs font-medium text-muted-foreground">{meeting.time}</span>
                                                         <div className="flex -space-x-2">
                                                             {meeting.attendees.slice(0, 2).map((attendee, i) => (
-                                                                <Avatar key={i} className="border-2 border-background h-6 w-6">
-                                                                    <AvatarFallback className="text-xs">{attendee.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                                                                </Avatar>
+                                                                <UserAvatar
+                                                                    key={i}
+                                                                    name={attendee}
+                                                                    className="h-6 w-6 border-2 border-background"
+                                                                />
                                                             ))}
                                                             {meeting.attendees.length > 2 && (
                                                                 <div className="flex items-center justify-center h-6 w-6 rounded-full bg-muted text-xs">

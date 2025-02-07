@@ -4,14 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { useDroppable } from "@dnd-kit/core"
 import { useSortable } from "@dnd-kit/sortable"
 import { Task, Meeting } from "@/types/dashboard"
-
-
 import { CSS } from "@dnd-kit/utilities"
 import { Trash2 } from "lucide-react"
+import { UserAvatar } from "@/components/common/UserAvatar";
+
 export function SortableItem({
     item,
     onDelete,
-
     type,
 }: {
     item: Task | Meeting;

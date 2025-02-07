@@ -4,7 +4,7 @@ import { Bell, X } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Notification, NotificationTitle, NotificationDescription } from "@/components/ui/notification"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import { useState } from "react"
 import { useUser } from "@/hooks/useUser"
 
@@ -18,6 +18,8 @@ interface PHeaderProps {
 export default function PHeader({ searchTerm, setSearchTerm }: PHeaderProps) {
     const [notifications, setNotifications] = useState<{ id: string; title: string; description: string }[]>([])
     const { user } = useUser()
+
+    console.log(user)
     return (
         <header className="bg-white/80 backdrop-blur-xl border-b border-indigo-100 p-4 sticky top-0 z-50 flex justify-between items-center shadow-sm">
             <h1 className="text-2xl  ">👋 Hey, {user?.full_name ?? 'Guest'}</h1>
@@ -65,10 +67,11 @@ export default function PHeader({ searchTerm, setSearchTerm }: PHeaderProps) {
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">
-                            <Avatar>
-                                <AvatarImage src="https://github.com/shadcn.png" />
-                                <AvatarFallback>JD</AvatarFallback>
-                            </Avatar>
+                            <UserAvatar
+                                name={user?.full_name || 'User'}
+                                imageUrl={user?.avatar_url}
+                                className="h-8 w-8"
+                            />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">

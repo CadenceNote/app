@@ -2,6 +2,8 @@ import { Button } from "@/components/ui/button"
 import { CalendarIcon, CheckCircle, Settings, BarChart2, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { UserAvatar } from "../common/UserAvatar";
+import { useUser } from "@/hooks/useUser";
 interface PSidebarProps {
     activeSection: string;
     setActiveSection: (section: string) => void;
@@ -10,7 +12,7 @@ interface PSidebarProps {
 
 
 export default function PSidebar({ activeSection, setActiveSection }: PSidebarProps) {
-
+    const { user } = useUser()
     const router = useRouter()
     const navigateToSettings = () => {
         router.push('dashboard/settings')
@@ -23,7 +25,11 @@ export default function PSidebar({ activeSection, setActiveSection }: PSidebarPr
 
 
                 <div className="flex items-center gap-2 mb-8">
-                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-green-500 to-indigo-500"></div>
+                    <UserAvatar
+                        name={user?.full_name || 'User'}
+                        imageUrl={user?.avatar_url}
+                        className="h-8 w-8"
+                    />
                     <h2 className="text-lg font-semibold bg-gradient-to-r from-green-600 to-indigo-600 bg-clip-text text-transparent">
                         Personal Dashboard
                     </h2>

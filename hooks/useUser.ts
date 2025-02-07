@@ -5,6 +5,7 @@ interface User {
     id: string;  // Changed to string for UUID
     email: string;
     full_name: string;
+    avatar_url?: string | null;  // Add avatar_url
 }
 
 export function useUser() {
@@ -25,7 +26,7 @@ export function useUser() {
                 if (session.user) {
                     const { data: userData, error } = await supabase
                         .from('users')
-                        .select('supabase_uid, email, full_name')
+                        .select('supabase_uid, email, full_name, avatar_url')
                         .eq('supabase_uid', session.user.id)
                         .single();
 
@@ -36,6 +37,7 @@ export function useUser() {
                             id: userData.supabase_uid,
                             email: userData.email,
                             full_name: userData.full_name,
+                            avatar_url: userData.avatar_url,
                         });
                     }
                 }
