@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider"
 import { DashboardProvider } from "@/contexts/DashboardContext";
 import { Providers } from "./providers";
+import { AvatarCacheProvider } from '@/contexts/AvatarCache';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,7 +34,9 @@ export default function RootLayout({
       >
         <Providers>
           <ThemeProvider>
-            {children}
+            <AvatarCacheProvider>
+              {children}
+            </AvatarCacheProvider>
           </ThemeProvider>
         </Providers>
         <Toaster />

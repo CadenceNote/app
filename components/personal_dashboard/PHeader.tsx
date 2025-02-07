@@ -19,10 +19,9 @@ export default function PHeader({ searchTerm, setSearchTerm }: PHeaderProps) {
     const [notifications, setNotifications] = useState<{ id: string; title: string; description: string }[]>([])
     const { user } = useUser()
 
-    console.log(user)
     return (
         <header className="bg-white/80 backdrop-blur-xl border-b border-indigo-100 p-4 sticky top-0 z-50 flex justify-between items-center shadow-sm">
-            <h1 className="text-2xl  ">👋 Hey, {user?.full_name ?? 'Guest'}</h1>
+            <h1 className="text-2xl  ">👋 Hey, {user?.full_name ?? 'Guest'}. </h1>
             <div className="flex items-center space-x-4">
                 <Input
                     type="search"

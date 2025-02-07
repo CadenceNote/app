@@ -25,11 +25,7 @@ export default function PSidebar({ activeSection, setActiveSection }: PSidebarPr
 
 
                 <div className="flex items-center gap-2 mb-8">
-                    <UserAvatar
-                        name={user?.full_name || 'User'}
-                        imageUrl={user?.avatar_url}
-                        className="h-8 w-8"
-                    />
+
                     <h2 className="text-lg font-semibold bg-gradient-to-r from-green-600 to-indigo-600 bg-clip-text text-transparent">
                         Personal Dashboard
                     </h2>

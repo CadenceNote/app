@@ -43,6 +43,7 @@ import { useUser } from "@/hooks/useUser";
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from "@/components/ui/table";
 import { TaskStatus, TaskPriority, TaskType } from '@/lib/types/task';
 import { useToast } from "@/hooks/use-toast";
+import { UserAvatar } from '@/components/common/UserAvatar';
 
 interface Task {
     id: string;
@@ -537,12 +538,11 @@ export default function TeamDashboardPage() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon">
-                                    <Avatar>
-                                        <AvatarImage src={user?.user_metadata?.avatar_url || ''} />
-                                        <AvatarFallback>
-                                            {user?.email?.charAt(0).toUpperCase() || 'U'}
-                                        </AvatarFallback>
-                                    </Avatar>
+                                    <UserAvatar
+                                        name={user?.full_name || 'User'}
+                                        imageUrl={user?.avatar_url}
+                                        className="h-8 w-8"
+                                    />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">

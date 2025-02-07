@@ -2,7 +2,8 @@
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAvatarCache } from "@/contexts/AvatarCache";
 
 interface UserAvatarProps {
     name: string;
@@ -18,6 +19,21 @@ export function UserAvatar({
     fallbackClassName
 }: UserAvatarProps) {
     const [imageLoaded, setImageLoaded] = useState(false);
+    const { getCachedUrl, setCachedUrl } = useAvatarCache();
+
+    useEffect(() => {
+        if (imageUrl) {
+            // Check cache first
+            const cached = getCachedUrl(imageUrl);
+            if (cached) {
+                setImageLoaded(true);
+                return;
+            }
+
+            // If not in cache, mark it for caching
+            setCachedUrl(imageUrl, imageUrl);
+        }
+    }, [imageUrl, getCachedUrl, setCachedUrl]);
 
     // Generate initials from name
     const initials = name
@@ -49,10 +65,11 @@ export function UserAvatar({
                         alt={name}
                         fill
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        className={`object-cover transition-opacity duration-200 ${imageLoaded ? 'opacity-100' : 'opacity-0'
-                            }`}
+                        className={`object-cover transition-opacity duration-200 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                         priority={true}
-                        onLoad={() => setImageLoaded(true)}
+                        onLoad={() => {
+                            setImageLoaded(true);
+                        }}
                         onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
@@ -62,8 +79,7 @@ export function UserAvatar({
                 </div>
             )}
             <AvatarFallback
-                className={`${fallbackClassName || colorClass} ${imageUrl && imageLoaded ? 'opacity-0' : 'opacity-100'
-                    }`}
+                className={`${fallbackClassName || colorClass} ${imageUrl && imageLoaded ? 'opacity-0' : 'opacity-100'}`}
             >
                 {initials}
             </AvatarFallback>
