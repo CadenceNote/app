@@ -33,6 +33,9 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { UserAvatar } from "@/components/common/UserAvatar";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { PriorityBadge } from "@/components/common/PriorityBadge";
 
 interface TaskDetailProps {
     isOpen: boolean
@@ -61,27 +64,23 @@ const DetailField: React.FC<DetailFieldProps> = ({ label, value, onClick, classN
     </div>
 );
 
-export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: TaskDetailProps) {
-    const defaultFormData: Partial<CreateTaskInput> = {
-        title: task?.title || '',
-        description: task?.description || '',
-        status: task?.status || TaskStatus.TODO,
-        priority: task?.priority || TaskPriority.MEDIUM,
-        type: task?.type || TaskType.TASK,
-        start_date: task?.start_date || undefined,
-        due_date: task?.due_date || undefined,
-        assignee_id: task?.assignee?.id || undefined,
-        labels: task?.labels?.map(l => l.id) || []
-    }
+const defaultFormData = {
+    title: '',
+    description: '',
+    status: TaskStatus.TODO,
+    priority: TaskPriority.MEDIUM,
+    type: TaskType.TASK,
+    start_date: undefined as string | undefined,
+    due_date: undefined as string | undefined,
+    assignee_id: undefined as string | undefined,
+    category: '',
+};
 
-    const [formData, setFormData] = useState<Partial<CreateTaskInput>>(defaultFormData);
+export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: TaskDetailProps) {
+    const [formData, setFormData] = useState(defaultFormData);
     const [newComment, setNewComment] = useState('');
-    const [startDate, setStartDate] = useState<Date | undefined>(
-        task?.start_date ? new Date(task.start_date) : undefined
-    );
-    const [dueDate, setDueDate] = useState<Date | undefined>(
-        task?.due_date ? new Date(task.due_date) : undefined
-    );
+    const [startDate, setStartDate] = useState<Date | undefined>();
+    const [dueDate, setDueDate] = useState<Date | undefined>();
     const [isDueDatePopoverOpen, setIsDueDatePopoverOpen] = useState(false);
     const [isStartDatePopoverOpen, setIsStartDatePopoverOpen] = useState(false);
     const [labels, setLabels] = useState<Label[]>([]);
@@ -91,11 +90,29 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
 
     const { toast } = useToast();
 
-    // Reset form data and dates when task changes
+    // Reset form data when task changes
     useEffect(() => {
-        setFormData(defaultFormData);
-        setStartDate(task?.start_date ? new Date(task.start_date) : undefined);
-        setDueDate(task?.due_date ? new Date(task.due_date) : undefined);
+        if (task) {
+            console.log('Setting form data for task:', task);
+            setFormData({
+                title: task.title || '',
+                description: task.description || '',
+                status: task.status as TaskStatus || TaskStatus.TODO,
+                priority: task.priority as TaskPriority || TaskPriority.MEDIUM,
+                type: task.type as TaskType || TaskType.TASK,
+                start_date: task.start_date,
+                due_date: task.due_date,
+                assignee_id: task.assignee?.id,
+                category: task.category || '',
+            });
+
+            setStartDate(task.start_date ? new Date(task.start_date) : undefined);
+            setDueDate(task.due_date ? new Date(task.due_date) : undefined);
+        } else {
+            setFormData(defaultFormData);
+            setStartDate(undefined);
+            setDueDate(undefined);
+        }
     }, [task]);
 
     // Load team members and labels
@@ -189,49 +206,44 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
     };
 
     const handleAddComment = async () => {
-        if (!task || !newComment.trim()) return
+        if (!task || !newComment.trim()) return;
 
         try {
-            await taskApi.addComment(teamId, task.id, { content: newComment })
-            setNewComment('')
+            await taskApi.addComment(teamId, task.id, newComment);
+            setNewComment('');
 
-            // Refresh task data to get updated comments
-            const updatedTask = await taskApi.getTask(teamId, task.id)
-            if (updatedTask && onTaskUpdate) {
-                onTaskUpdate(updatedTask)
+            const updatedTask = await taskApi.getTask(teamId, task.id);
+            if (onTaskUpdate) {
+                onTaskUpdate(updatedTask);
             }
 
             toast({
                 title: "Comment added",
                 description: "Your comment has been added successfully."
-            })
+            });
         } catch (err) {
-            console.error('Failed to add comment:', err)
+            console.error('Failed to add comment:', err);
             toast({
                 title: "Error",
                 description: "Failed to add comment. Please try again.",
                 variant: "destructive"
-            })
+            });
         }
-    }
+    };
 
     const handleSubmit = async () => {
         try {
-            if (task) {
-                // Format the data for update
-                const updateData = {
-                    title: formData.title,
-                    description: formData.description,
-                    status: formData.status,
-                    priority: formData.priority,
-                    type: formData.type,
-                    start_date: startDate ? startDate.toISOString() : undefined,
-                    due_date: dueDate ? dueDate.toISOString() : undefined,
-                    assignee_id: formData.assignee_id,
-                    labels: formData.labels?.map(l => Number(l)) || [],
-                };
+            const submitData = {
+                ...formData,
+                start_date: startDate?.toISOString(),
+                due_date: dueDate?.toISOString(),
+            };
 
-                const updatedTask = await taskApi.updateTask(teamId, task.id, updateData);
+            console.log('Submitting task data:', submitData);
+
+            if (task) {
+                const updatedTask = await taskApi.updateTask(teamId, task.id, submitData);
+                console.log('Task updated:', updatedTask);
                 if (onTaskUpdate) {
                     onTaskUpdate(updatedTask);
                 }
@@ -240,23 +252,8 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                     description: "Your changes have been saved successfully."
                 });
             } else {
-                const requiredFields: CreateTaskInput = {
-                    title: formData.title || '',
-                    description: formData.description || '',
-                    status: formData.status || TaskStatus.TODO,
-                    priority: formData.priority || TaskPriority.MEDIUM,
-                    type: formData.type || TaskType.TASK,
-                    start_date: startDate ? startDate.toISOString() : undefined,
-                    due_date: dueDate ? dueDate.toISOString() : undefined,
-                    assignee_id: formData.assignee_id,
-                    labels: formData.labels?.map(l => Number(l)) || [],
-                    time_tracking: {
-                        original_estimate: 0,
-                        remaining_estimate: 0,
-                        unit: TimeUnit.HOURS
-                    }
-                };
-                const createdTask = await taskApi.createTask(teamId, requiredFields);
+                const createdTask = await taskApi.createTask(teamId, submitData);
+                console.log('Task created:', createdTask);
                 if (onTaskUpdate) {
                     onTaskUpdate(createdTask);
                 }
@@ -301,22 +298,22 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                 )}
                             </div>
                             <Input
-                                value={formData.title || ''}
+                                value={formData.title}
                                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                                 placeholder="Task title"
                                 className="text-xl font-semibold mb-4"
                             />
                             <Textarea
-                                value={formData.description || ''}
+                                value={formData.description}
                                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                                 placeholder="Add a description..."
                                 className="min-h-[100px] mb-6"
                             />
 
                             {/* Metadata Section */}
-                            {task?.task_metadata && (
+                            {task?.task_metadata && Object.keys(task.task_metadata).length > 0 && (
                                 <div className="mb-6">
-                                    <h3 className="text-sm font-medium mb-2">Additional Information</h3>
+                                    <h3 className="text-sm font-medium mb-2">Metadata</h3>
                                     <div className="bg-muted/50 rounded-lg p-4">
                                         <pre className="text-sm whitespace-pre-wrap">
                                             {JSON.stringify(task.task_metadata, null, 2)}
@@ -364,31 +361,37 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
 
                                 {/* Comments Section */}
                                 {task && (
-                                    <div className="space-y-4 max-h-[400px] overflow-y-auto mb-16">
+                                    <div className="space-y-4">
                                         <h3 className="text-sm font-medium">Comments</h3>
+                                        <div className="flex gap-2">
+                                            <Textarea
+                                                placeholder="Add a comment..."
+                                                value={newComment}
+                                                onChange={(e) => setNewComment(e.target.value)}
+                                                className="flex-1"
+                                            />
+                                            <Button onClick={handleAddComment}>Add</Button>
+                                        </div>
                                         <div className="space-y-4">
-                                            <div className="flex gap-2">
-                                                <Textarea
-                                                    placeholder="Add a comment..."
-                                                    value={newComment}
-                                                    onChange={(e) => setNewComment(e.target.value)}
-                                                    className="flex-1"
-                                                />
-                                                <Button onClick={handleAddComment}>Add</Button>
-                                            </div>
-                                            <div className="space-y-4">
-                                                {task.comments?.map((comment) => (
-                                                    <div key={comment.id} className="bg-gray-50 rounded-lg p-4">
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <span className="font-medium">{comment.user.full_name}</span>
-                                                            <span className="text-sm text-gray-500">
+                                            {task.comments?.map((comment) => (
+                                                <div key={comment.id} className="bg-muted/50 rounded-lg p-4">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <UserAvatar
+                                                            name={comment.user.full_name || comment.user.email}
+                                                            className="h-8 w-8"
+                                                        />
+                                                        <div>
+                                                            <span className="font-medium">
+                                                                {comment.user.full_name || comment.user.email}
+                                                            </span>
+                                                            <span className="text-sm text-muted-foreground ml-2">
                                                                 {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
                                                             </span>
                                                         </div>
-                                                        <p className="text-gray-700">{comment.content}</p>
                                                     </div>
-                                                ))}
-                                            </div>
+                                                    <p className="text-muted-foreground ml-10">{comment.content}</p>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -411,17 +414,22 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                 value={
                                     <Select
                                         value={formData.status}
-                                        onValueChange={(value: TaskStatus) => setFormData(prev => ({ ...prev, status: value }))}
+                                        onValueChange={(value: TaskStatus) => {
+                                            console.log('Setting status to:', value);
+                                            setFormData(prev => ({ ...prev, status: value }));
+                                        }}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue />
+                                            <SelectValue>
+                                                <StatusBadge status={formData.status} />
+                                            </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value={TaskStatus.TODO}>To Do</SelectItem>
-                                            <SelectItem value={TaskStatus.IN_PROGRESS}>In Progress</SelectItem>
-                                            <SelectItem value={TaskStatus.DONE}>Done</SelectItem>
-                                            <SelectItem value={TaskStatus.BLOCKED}>Blocked</SelectItem>
-                                            <SelectItem value={TaskStatus.CANCELLED}>Cancelled</SelectItem>
+                                            {Object.values(TaskStatus).map(status => (
+                                                <SelectItem key={status} value={status}>
+                                                    <StatusBadge status={status} />
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 }
@@ -432,16 +440,22 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                 value={
                                     <Select
                                         value={formData.priority}
-                                        onValueChange={(value: TaskPriority) => setFormData(prev => ({ ...prev, priority: value }))}
+                                        onValueChange={(value: TaskPriority) => {
+                                            console.log('Setting priority to:', value);
+                                            setFormData(prev => ({ ...prev, priority: value }));
+                                        }}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue />
+                                            <SelectValue>
+                                                <PriorityBadge priority={formData.priority} />
+                                            </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value={TaskPriority.LOW}>Low</SelectItem>
-                                            <SelectItem value={TaskPriority.MEDIUM}>Medium</SelectItem>
-                                            <SelectItem value={TaskPriority.HIGH}>High</SelectItem>
-                                            <SelectItem value={TaskPriority.URGENT}>Urgent</SelectItem>
+                                            {Object.values(TaskPriority).map(priority => (
+                                                <SelectItem key={priority} value={priority}>
+                                                    <PriorityBadge priority={priority} />
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 }
@@ -452,16 +466,22 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                 value={
                                     <Select
                                         value={formData.type}
-                                        onValueChange={(value: TaskType) => setFormData(prev => ({ ...prev, type: value }))}
+                                        onValueChange={(value: TaskType) => {
+                                            console.log('Setting type to:', value);
+                                            setFormData(prev => ({ ...prev, type: value }));
+                                        }}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue />
+                                            <SelectValue>
+                                                {formData.type}
+                                            </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value={TaskType.TASK}>Task</SelectItem>
-                                            <SelectItem value={TaskType.BUG}>Bug</SelectItem>
-                                            <SelectItem value={TaskType.FEATURE}>Feature</SelectItem>
-                                            <SelectItem value={TaskType.IMPROVEMENT}>Improvement</SelectItem>
+                                            {Object.values(TaskType).map(type => (
+                                                <SelectItem key={type} value={type}>
+                                                    {type}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 }
@@ -477,14 +497,41 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                             assignee_id: value === "unassigned" ? undefined : value
                                         }))}
                                     >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Unassigned" />
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue>
+                                                {formData.assignee_id ? (
+                                                    <div className="flex items-center gap-2">
+                                                        {task?.assignee && (
+                                                            <UserAvatar
+                                                                name={task.assignee.full_name || task.assignee.email}
+                                                                imageUrl={task.assignee.avatar_url}
+                                                                className="h-6 w-6"
+                                                            />
+                                                        )}
+                                                        <span>
+                                                            {teamMembers.find(m => m.id === formData.assignee_id)?.full_name ||
+                                                                teamMembers.find(m => m.id === formData.assignee_id)?.email ||
+                                                                'Unassigned'}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    'Unassigned'
+                                                )}
+                                            </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                                            <SelectItem value="unassigned">
+                                                <span className="text-muted-foreground">Unassigned</span>
+                                            </SelectItem>
                                             {teamMembers.map(member => (
                                                 <SelectItem key={member.id} value={member.id}>
-                                                    {member.full_name || member.email}
+                                                    <div className="flex items-center gap-2">
+                                                        <UserAvatar
+                                                            name={member.full_name || member.email}
+                                                            className="h-6 w-6"
+                                                        />
+                                                        <span>{member.full_name || member.email}</span>
+                                                    </div>
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -501,34 +548,25 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                     >
                                         <PopoverTrigger asChild>
                                             <Button
-                                                variant="ghost"
+                                                variant="outline"
                                                 className={cn(
-                                                    "p-0 h-auto font-normal w-full justify-start",
-                                                    task?.completed_at && "text-green-600"
+                                                    "w-full justify-start text-left font-normal",
+                                                    !dueDate && "text-muted-foreground"
                                                 )}
                                             >
-                                                <div className="text-left">
-                                                    <div>{dueDate ? format(dueDate, 'MMM d, yyyy') : 'None'}</div>
-                                                    {task?.completed_at && (
-                                                        <div className="text-xs">
-                                                            Completed {format(new Date(task.completed_at), 'MMM d, yyyy')}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                {dueDate ? format(dueDate, 'PPP') : <span>Pick a date</span>}
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="z-50 relative" sideOffset={5}>
-                                            <div className="pointer-events-auto">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={dueDate}
-                                                    onSelect={(date) => {
-                                                        handleDateSelect('due_date', date);
-                                                        setIsDueDatePopoverOpen(false);
-                                                    }}
-                                                    initialFocus
-                                                />
-                                            </div>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                                mode="single"
+                                                selected={dueDate}
+                                                onSelect={(date) => {
+                                                    handleDateSelect('due_date', date);
+                                                    setIsDueDatePopoverOpen(false);
+                                                }}
+                                                initialFocus
+                                            />
                                         </PopoverContent>
                                     </Popover>
                                 }
@@ -543,24 +581,25 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                     >
                                         <PopoverTrigger asChild>
                                             <Button
-                                                variant="ghost"
-                                                className="p-0 h-auto font-normal w-full justify-start"
+                                                variant="outline"
+                                                className={cn(
+                                                    "w-full justify-start text-left font-normal",
+                                                    !startDate && "text-muted-foreground"
+                                                )}
                                             >
-                                                {startDate ? format(startDate, 'MMM d, yyyy') : 'None'}
+                                                {startDate ? format(startDate, 'PPP') : <span>Pick a date</span>}
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="z-50 relative" sideOffset={5}>
-                                            <div className="pointer-events-auto">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={startDate}
-                                                    onSelect={(date) => {
-                                                        handleDateSelect('start_date', date);
-                                                        setIsStartDatePopoverOpen(false);
-                                                    }}
-                                                    initialFocus
-                                                />
-                                            </div>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                                mode="single"
+                                                selected={startDate}
+                                                onSelect={(date) => {
+                                                    handleDateSelect('start_date', date);
+                                                    setIsStartDatePopoverOpen(false);
+                                                }}
+                                                initialFocus
+                                            />
                                         </PopoverContent>
                                     </Popover>
                                 }

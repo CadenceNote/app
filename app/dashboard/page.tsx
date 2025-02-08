@@ -14,6 +14,7 @@ import { taskApi } from '@/services/taskApi';
 import { meetingApi } from '@/services/meetingApi';
 import { auth } from '@/services/api';
 import { teamApi } from '@/services/teamApi';
+import { mapPriorityToEnum, mapTaskStatus, mapTaskPriority, mapStatusToEnum } from '@/utils/taskMappings';
 
 type Task = {
     id: string;
@@ -27,6 +28,7 @@ type Task = {
     urgency: 'urgent' | 'not-urgent';
     quadrant: 'important-urgent' | 'important-not-urgent' | 'not-important-urgent' | 'not-important-not-urgent' | 'unsorted';
     team_id: number;
+    tag: string;
 };
 
 type Meeting = {
@@ -57,35 +59,6 @@ export default function DashboardPage() {
     const [activeSection, setActiveSection] = useState('summary-section')
     const [teamId, setTeamId] = useState<number | null>(null)
 
-    const updateTaskQuadrant = async (
-        taskId: string,
-        quadrant: Task['quadrant'],
-        importance: Task['importance'],
-        urgency: Task['urgency']
-    ) => {
-        // Optimistic update
-        setTasks(prevTasks => prevTasks.map(task =>
-            task.id === taskId ? { ...task, quadrant, importance, urgency } : task
-        ));
-
-        try {
-            await taskApi.updatePersonalPreferences(Number(taskId), {
-                importance: importance === 'important',
-                urgency: urgency === 'urgent',
-                quadrant
-            });
-        } catch (error) {
-            // Revert on error
-            setTasks(prevTasks => prevTasks.map(task =>
-                task.id === taskId ? {
-                    ...task,
-                    quadrant: task.quadrant,
-                    importance: task.importance,
-                    urgency: task.urgency
-                } : task
-            ));
-        }
-    };
     // Fetch initial data
     useEffect(() => {
         const fetchData = async () => {
@@ -100,19 +73,29 @@ export default function DashboardPage() {
 
                     // Fetch tasks
                     const tasksData = await taskApi.listTasks(currentTeamId);
-                    setTasks(tasksData.map(task => ({
-                        id: task.id.toString(),
-                        taskId: `TASK-${task.team_ref_number}`,
-                        title: task.title,
-                        category: task.category || 'Other',
-                        status: task.status as Task['status'],
-                        dueDate: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '',
-                        priority: task.priority as Task['priority'],
-                        importance: 'normal',
-                        urgency: 'not-urgent',
-                        quadrant: 'unsorted',
-                        team_id: currentTeamId
-                    })));
+                    console.log('Raw tasks data:', tasksData);
+
+                    const tasksWithPreferences = await Promise.all(tasksData.map(async task => {
+                        const preferences = await taskApi.getPersonalPreferences(task.id);
+                        console.log(`Preferences for task ${task.id}:`, preferences);
+                        return {
+                            id: task.id.toString(),
+                            taskId: `TASK-${task.team_ref_number}`,
+                            title: task.title,
+                            category: task.category || 'Other',
+                            status: mapTaskStatus(task.status),
+                            dueDate: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '',
+                            priority: mapTaskPriority(task.priority),
+                            importance: preferences.importance ? 'important' : 'normal',
+                            urgency: preferences.urgency ? 'urgent' : 'not-urgent',
+                            quadrant: preferences.quadrant,
+                            team_id: currentTeamId,
+                            tag: task.category || 'Other',
+                            order_in_quadrant: preferences.order_in_quadrant || 0
+                        };
+                    }));
+                    console.log('Tasks with preferences:', tasksWithPreferences);
+                    setTasks(tasksWithPreferences);
 
                     // Fetch meetings
                     const meetingsData = await meetingApi.listMeetings(currentTeamId);
@@ -162,25 +145,32 @@ export default function DashboardPage() {
     }, [])
 
     // Handle task updates
-    const handleTaskUpdate = async (updatedTasks: Task[]) => {
+    const handleTaskUpdate = async (updatedTasks: Task[] | Task) => {
         if (!teamId) return;
 
         try {
-            // Create a copy of the tasks array
-            const newTasks = [...updatedTasks];
+            // If we receive a single task, convert it to an array
+            const taskArray = Array.isArray(updatedTasks) ? updatedTasks : [updatedTasks];
 
-            // Update each modified task
-            for (const task of newTasks) {
-                await taskApi.updateTask(teamId, Number(task.id), {
-                    title: task.title,
-                    status: task.status,
-                    priority: task.priority,
-                    category: task.category,
-                    due_date: task.dueDate
-                });
+            // Filter out any null/undefined tasks
+            const validTasks = taskArray.filter(task => task != null);
+
+            if (validTasks.length === 0) {
+                console.warn('No valid tasks to update');
+                return;
             }
 
-            setTasks(newTasks);
+            // Update the tasks state while preserving other tasks
+            setTasks(prevTasks => {
+                const updatedTaskMap = new Map(validTasks.map(task => [task.id, task]));
+
+                return prevTasks.map(task =>
+                    updatedTaskMap.has(task.id)
+                        ? updatedTaskMap.get(task.id)!
+                        : task
+                );
+            });
+
         } catch (error) {
             console.error('Error updating tasks:', error);
         }
@@ -251,10 +241,7 @@ export default function DashboardPage() {
                         <section id="tasks-section" className="min-h-screen p-4 md:p-6 relative scroll-mt-20">
                             <PTask
                                 tasks={tasks}
-                                meetings={meetings}
                                 setTasks={handleTaskUpdate}
-                                setMeetings={handleMeetingUpdate}
-                                updateTaskQuadrant={updateTaskQuadrant}
                                 searchTerm={searchTerm}
                             />
                         </section>

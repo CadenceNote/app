@@ -28,7 +28,8 @@ export function SortableItem({
         id: item.id,
         data: {
             type,
-            item
+            item,
+            quadrant: (item as Task).quadrant
         }
     })
 
@@ -39,7 +40,7 @@ export function SortableItem({
         cursor: 'grab',
         position: 'relative',
         zIndex: isDragging ? 1000 : 1
-    }
+    } as const;
 
     if (type === "task") {
         const task = item as Task
@@ -144,7 +145,12 @@ export function SortableItem({
 
 export function DroppableContainer({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
     const { setNodeRef, isOver } = useDroppable({
-        id: id
+        id: id,
+        data: {
+            type: 'container',
+            quadrant: id,
+            accepts: ['task']
+        }
     });
 
     return (
