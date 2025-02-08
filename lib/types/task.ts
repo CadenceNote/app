@@ -99,31 +99,38 @@ export interface Comment {
     replies?: Comment[];
 }
 
+export interface TaskAssignee {
+    id: string;
+    email: string;
+    full_name?: string;
+    avatar_url?: string;
+    role: 'ASSIGNEE' | 'WATCHER';
+}
+
 export interface Task {
-    id: number;
+    id: string;
+    taskId: string;
     title: string;
     description?: string;
     status: TaskStatus;
     priority: TaskPriority;
     type: TaskType;
-    team_id: number;
-    team_ref_number: number;
-    parent_id?: number;
-    order_index?: number;
-    assignee_id?: number;
-    created_by_id: number;
     start_date?: string;
     due_date?: string;
-    completed_at?: string;
-    created_at: string;
-    updated_at?: string;
+    assignees: TaskAssignee[];
+    watchers: TaskAssignee[];
     category?: string;
-    task_metadata?: Record<string, unknown>;
-    parent?: Task;
-    assignee?: User;
-    created_by: User;
-    labels?: TaskLabel[];
+    team_id: number;
+    team_ref_number?: string;
+    created_at: string;
+    created_by?: {
+        id: string;
+        email: string;
+        full_name?: string;
+    };
     comments?: Comment[];
+    labels?: string[];
+    task_metadata?: Record<string, any>;
 }
 
 export interface CreateTaskInput {

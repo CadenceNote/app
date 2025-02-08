@@ -9,15 +9,15 @@ import PAlerts from "@/components/personal_dashboard/PAlerts"
 import PEvents from "@/components/personal_dashboard/PEvents"
 import PTask from "@/components/personal_dashboard/PTask"
 import PMeeting from "@/components/personal_dashboard/PMeeting"
-import PAnalytics from "@/components/personal_dashboard/PAnalytics"
 import { taskApi } from '@/services/taskApi';
 import { meetingApi } from '@/services/meetingApi';
 import { auth } from '@/services/api';
 import { teamApi } from '@/services/teamApi';
-import { mapPriorityToEnum, mapTaskStatus, mapTaskPriority, mapStatusToEnum } from '@/utils/taskMappings';
 import { TaskType } from "@/lib/types/task"
 import { TaskPriority } from "@/lib/types/task"
 import { TaskStatus } from "@/lib/types/task"
+import { Meeting as APIMeeting } from "@/lib/types/meeting"
+import { useToast } from "@/hooks/use-toast"
 
 type Task = {
     id: string;
@@ -63,14 +63,7 @@ type Task = {
     order_in_quadrant?: number;
 };
 
-type Meeting = {
-    id: string;
-    title: string;
-    time: string;
-    date: string;
-    attendees: string[];
-    isImportant: boolean;
-};
+type Meeting = APIMeeting;
 
 type Alert = {
     id: string;
@@ -90,6 +83,7 @@ export default function DashboardPage() {
     const [alerts, setAlerts] = useState<Alert[]>([])
     const [activeSection, setActiveSection] = useState('summary-section')
     const [teamId, setTeamId] = useState<number | null>(null)
+    const { toast } = useToast()
 
     // Fetch initial data
     useEffect(() => {
@@ -105,36 +99,19 @@ export default function DashboardPage() {
 
                     // Fetch tasks with full data
                     const tasksData = await taskApi.listTasks(currentTeamId);
-                    console.log('Raw tasks data:', tasksData);
-
-                    const tasksWithPreferences = await Promise.all(tasksData.map(async task => {
-                        const preferences = await taskApi.getPersonalPreferences(task.id);
-                        return {
-                            ...task, // Keep all original task data
-                            importance: preferences.importance ? 'important' : 'normal',
-                            urgency: preferences.urgency ? 'urgent' : 'not-urgent',
-                            quadrant: preferences.quadrant,
-                            order_in_quadrant: preferences.order_in_quadrant || 0,
-                            taskId: `T-${task.team_ref_number}`,
-                        };
-                    }));
-
-                    console.log('Tasks with preferences:', tasksWithPreferences);
-                    setTasks(tasksWithPreferences);
+                    setTasks(tasksData);
 
                     // Fetch meetings
                     const meetingsData = await meetingApi.listMeetings(currentTeamId);
-                    setMeetings(meetingsData.map(meeting => ({
-                        id: meeting.id.toString(),
-                        title: meeting.title,
-                        time: new Date(meeting.start_time).toLocaleTimeString(),
-                        date: new Date(meeting.start_time).toISOString().split('T')[0],
-                        attendees: meeting.participants?.map(p => p.full_name || p.email) || [],
-                        isImportant: false
-                    })));
+                    setMeetings(meetingsData);
                 }
             } catch (error) {
                 console.error('Error fetching data:', error);
+                toast({
+                    title: "Error",
+                    description: "Failed to fetch dashboard data",
+                    variant: "destructive"
+                });
             }
         };
 
@@ -173,34 +150,53 @@ export default function DashboardPage() {
     const handleTaskUpdate = async (updatedTasks: Task[] | Task) => {
         if (!teamId) return;
 
-        const taskArray = Array.isArray(updatedTasks) ? updatedTasks : [updatedTasks];
-        setTasks(prevTasks => {
-            const updatedTaskMap = new Map(taskArray.map(task => [task.id, task]));
-            return prevTasks.map(task =>
-                updatedTaskMap.has(task.id) ? updatedTaskMap.get(task.id)! : task
-            );
-        });
+        try {
+            if (Array.isArray(updatedTasks)) {
+                setTasks(updatedTasks);
+            } else {
+                // If it's a single task update
+                const taskArray = [updatedTasks];
+
+                // Update local state immediately
+                setTasks(prevTasks => {
+                    const updatedTaskMap = new Map(taskArray.map(task => [task.id, task]));
+                    return prevTasks.map(task =>
+                        updatedTaskMap.has(task.id)
+                            ? {
+                                ...updatedTaskMap.get(task.id)!,
+                                taskId: `T-${updatedTaskMap.get(task.id)!.team_ref_number || updatedTaskMap.get(task.id)!.id}`
+                            }
+                            : task
+                    );
+                });
+
+                // Refresh tasks from server
+                try {
+                    const tasksData = await taskApi.listTasks(teamId);
+                    if (tasksData) {
+                        setTasks(tasksData.map(task => ({
+                            ...task,
+                            taskId: `T-${task.team_ref_number || task.id}`
+                        })));
+                    }
+                } catch (refreshError) {
+                    console.error('Error refreshing tasks:', refreshError);
+                }
+            }
+        } catch (error) {
+            console.error('Error updating tasks:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update tasks. Please try again.",
+                variant: "destructive"
+            });
+        }
     };
 
     // Handle meeting updates
     const handleMeetingUpdate = async (updatedMeetings: Meeting[]) => {
         if (!teamId) return;
-
-        try {
-            const newMeetings = [...updatedMeetings];
-
-            // Update each modified meeting
-            for (const meeting of newMeetings) {
-                await meetingApi.updateMeeting(teamId, Number(meeting.id), {
-                    title: meeting.title,
-                    start_time: `${meeting.date}T${meeting.time}`
-                });
-            }
-
-            setMeetings(newMeetings);
-        } catch (error) {
-            console.error('Error updating meetings:', error);
-        }
+        setMeetings(updatedMeetings);
     };
 
     return (
@@ -255,19 +251,9 @@ export default function DashboardPage() {
                         {/* Meetings Section */}
                         <section id="meetings-section" className="min-h-screen p-4 md:p-6 relative scroll-mt-20">
                             <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 opacity-40"></div>
-                            <PMeeting
-                                meetings={meetings}
-                                setMeetings={handleMeetingUpdate}
-                                searchTerm={searchTerm}
-                            />
+                            <PMeeting />
                         </section>
                     </div>
-
-                    {/* Charts Section - Moved to bottom */}
-                    <section id="analytics-section" className="min-h-screen p-4 md:p-6 relative scroll-mt-20">
-                        <h2 className="text-2xl font-bold">Analytics</h2>
-                        <PAnalytics />
-                    </section>
                 </div>
             </main>
         </div>

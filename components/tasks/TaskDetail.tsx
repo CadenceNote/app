@@ -32,10 +32,12 @@ import { teamApi } from '@/services/teamApi';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Eye } from "lucide-react";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { PriorityBadge } from "@/components/common/PriorityBadge";
+import { useUser } from '@/hooks/useUser';
+import { UserCombobox } from "@/components/common/UserCombobox";
 
 interface TaskDetailProps {
     isOpen: boolean
@@ -53,14 +55,9 @@ interface DetailFieldProps {
 }
 
 const DetailField: React.FC<DetailFieldProps> = ({ label, value, onClick, className = "" }) => (
-    <div className={`py-2 ${className}`}>
-        <div className="text-sm text-gray-600 mb-1">{label}</div>
-        <div
-            className={`${onClick ? 'cursor-pointer text-blue-600 hover:underline' : ''}`}
-            onClick={onClick}
-        >
-            {value || 'None'}
-        </div>
+    <div className={`relative py-2 ${className}`}>
+        <label className="text-sm font-medium text-muted-foreground">{label}</label>
+        <div className="mt-1">{value}</div>
     </div>
 );
 
@@ -72,8 +69,14 @@ const defaultFormData = {
     type: TaskType.TASK,
     start_date: undefined as string | undefined,
     due_date: undefined as string | undefined,
-    assignee_id: undefined as string | undefined,
+    assignees: [] as { id: string; email: string; full_name?: string }[],
     category: '',
+};
+
+// Add this style at the top of the file
+const calendarPopoverStyle: React.CSSProperties = {
+    zIndex: 99999,  // Very high z-index
+    position: 'relative'
 };
 
 export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: TaskDetailProps) {
@@ -84,9 +87,12 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
     const [isDueDatePopoverOpen, setIsDueDatePopoverOpen] = useState(false);
     const [isStartDatePopoverOpen, setIsStartDatePopoverOpen] = useState(false);
     const [labels, setLabels] = useState<Label[]>([]);
-    const [teamMembers, setTeamMembers] = useState<{ id: string; email: string; full_name: string }[]>([]);
+    const [teamMembers, setTeamMembers] = useState<{ id: string; email: string; full_name: string; avatar_url: string }[]>([]);
     const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [teamName, setTeamName] = useState('');
+    const [isWatching, setIsWatching] = useState(false);
+    const { user } = useUser();
 
     const { toast } = useToast();
 
@@ -97,12 +103,12 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
             setFormData({
                 title: task.title || '',
                 description: task.description || '',
-                status: task.status as TaskStatus || TaskStatus.TODO,
-                priority: task.priority as TaskPriority || TaskPriority.MEDIUM,
-                type: task.type as TaskType || TaskType.TASK,
+                status: task.status,
+                priority: task.priority,
+                type: task.type || TaskType.TASK,
                 start_date: task.start_date,
                 due_date: task.due_date,
-                assignee_id: task.assignee?.id,
+                assignees: task.assignees || [],
                 category: task.category || '',
             });
 
@@ -124,7 +130,8 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                 setTeamMembers(teamData.members?.map(m => ({
                     id: m.user.id.toString(),
                     email: m.user.email,
-                    full_name: m.user.full_name
+                    full_name: m.user.full_name,
+                    avatar_url: m.user.avatar_url
                 })) || []);
 
                 // Load labels
@@ -144,6 +151,22 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
             loadData();
         }
     }, [teamId]);
+
+    // Load team name and check if user is watching
+    useEffect(() => {
+        const loadTeamDetails = async () => {
+            if (task) {
+                try {
+                    const team = await teamApi.getTeam(teamId);
+                    setTeamName(team.name);
+                    setIsWatching(task.watchers.some(w => w.id === user?.id));
+                } catch (error) {
+                    console.error('Failed to load team details:', error);
+                }
+            }
+        };
+        loadTeamDetails();
+    }, [task, teamId, user?.id]);
 
     // Handle label search
     const handleLabelSearch = async (query: string) => {
@@ -237,37 +260,56 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                 ...formData,
                 start_date: startDate?.toISOString(),
                 due_date: dueDate?.toISOString(),
+                assignees: formData.assignees.map(a => a.id.toString()),
             };
 
             console.log('Submitting task data:', submitData);
 
-            if (task) {
-                const updatedTask = await taskApi.updateTask(teamId, task.id, submitData);
-                console.log('Task updated:', updatedTask);
-                if (onTaskUpdate) {
-                    onTaskUpdate(updatedTask);
-                }
-                toast({
-                    title: "Task updated",
-                    description: "Your changes have been saved successfully."
-                });
-            } else {
-                const createdTask = await taskApi.createTask(teamId, submitData);
-                console.log('Task created:', createdTask);
-                if (onTaskUpdate) {
-                    onTaskUpdate(createdTask);
-                }
-                toast({
-                    title: "Task created",
-                    description: "The new task has been created successfully."
-                });
+            if (!task?.id || !onTaskUpdate) {
+                throw new Error('No task ID or update handler provided');
             }
-            onClose();
-        } catch (err) {
-            console.error('Failed to save task:', err);
+
+            const updatedTask = await taskApi.updateTask(teamId, task.id, submitData);
+            onTaskUpdate(updatedTask);
+
+            toast({
+                title: "Success",
+                description: "Task updated successfully"
+            });
+        } catch (error) {
+            console.error('Failed to save task:', error);
             toast({
                 title: "Error",
-                description: "Failed to save the task. Please try again.",
+                description: "Failed to save changes. Please try again.",
+                variant: "destructive"
+            });
+        }
+    };
+
+    const toggleWatch = async () => {
+        if (!task || !user) return;
+
+        try {
+            const updatedTask = isWatching
+                ? await taskApi.removeWatcher(teamId, task.id, user.id)
+                : await taskApi.addWatcher(teamId, task.id, user.id);
+
+            setIsWatching(!isWatching);
+            if (onTaskUpdate) {
+                onTaskUpdate(updatedTask);
+            }
+
+            toast({
+                title: isWatching ? "Unwatched" : "Watching",
+                description: isWatching
+                    ? "You will no longer receive updates for this task"
+                    : "You will receive updates for this task"
+            });
+        } catch (error) {
+            console.error('Failed to update watch status:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update watch status",
                 variant: "destructive"
             });
         }
@@ -275,134 +317,131 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
+            <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden">
                 <DialogTitle className="sr-only">
-                    {task?.title || 'New Task'}
+                    {task?.title || 'Task Details'}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
                     View and edit task details
                 </DialogDescription>
-                <div className="flex-1 flex">
+                <div className="flex-1 flex overflow-hidden">
                     {/* Left Column - Main Content */}
                     <div className="flex-1 p-6 overflow-y-auto border-r">
-                        {/* Title Section */}
-                        <div className="mb-6">
-                            <div className="flex items-center justify-between mb-2">
+                        {/* Header Section */}
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-4">
                                 <div className="text-sm text-gray-500">
-                                    {task ? `T-${task.team_ref_number}` : 'New Task'}
+                                    {teamName} • T-{task?.team_ref_number}
                                 </div>
-                                {task && (
-                                    <div className="text-xs text-muted-foreground">
-                                        Created {new Date(task.created_at).toLocaleDateString()} by {task.created_by?.full_name || task.created_by?.email}
-                                    </div>
-                                )}
-                            </div>
-                            <Input
-                                value={formData.title}
-                                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                                placeholder="Task title"
-                                className="text-xl font-semibold mb-4"
-                            />
-                            <Textarea
-                                value={formData.description}
-                                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                                placeholder="Add a description..."
-                                className="min-h-[100px] mb-6"
-                            />
-
-                            {/* Metadata Section */}
-                            {task?.task_metadata && Object.keys(task.task_metadata).length > 0 && (
-                                <div className="mb-6">
-                                    <h3 className="text-sm font-medium mb-2">Metadata</h3>
-                                    <div className="bg-muted/50 rounded-lg p-4">
-                                        <pre className="text-sm whitespace-pre-wrap">
-                                            {JSON.stringify(task.task_metadata, null, 2)}
-                                        </pre>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Related Items Section */}
-                            {(task?.source_meeting_id || task?.source_note_id || task?.parent_id) && (
-                                <div className="mb-6">
-                                    <h3 className="text-sm font-medium mb-2">Related Items</h3>
-                                    <div className="space-y-2">
-                                        {task.source_meeting_id && (
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <span className="text-muted-foreground">Source Meeting:</span>
-                                                <Button variant="link" className="h-auto p-0">
-                                                    Meeting #{task.source_meeting_id}
-                                                </Button>
-                                            </div>
-                                        )}
-                                        {task.source_note_id && (
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <span className="text-muted-foreground">Source Note:</span>
-                                                <Button variant="link" className="h-auto p-0">
-                                                    Note #{task.source_note_id}
-                                                </Button>
-                                            </div>
-                                        )}
-                                        {task.parent_id && (
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <span className="text-muted-foreground">Parent Task:</span>
-                                                <Button variant="link" className="h-auto p-0">
-                                                    Task #{task.parent_id}
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Activity Section */}
-                            <div className="space-y-6">
-                                {task && <h2 className="text-lg font-semibold">Activity</h2>}
-
-                                {/* Comments Section */}
-                                {task && (
-                                    <div className="space-y-4">
-                                        <h3 className="text-sm font-medium">Comments</h3>
-                                        <div className="flex gap-2">
-                                            <Textarea
-                                                placeholder="Add a comment..."
-                                                value={newComment}
-                                                onChange={(e) => setNewComment(e.target.value)}
-                                                className="flex-1"
-                                            />
-                                            <Button onClick={handleAddComment}>Add</Button>
-                                        </div>
-                                        <div className="space-y-4">
-                                            {task.comments?.map((comment) => (
-                                                <div key={comment.id} className="bg-muted/50 rounded-lg p-4">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <UserAvatar
-                                                            name={comment.user.full_name || comment.user.email}
-                                                            className="h-8 w-8"
-                                                        />
-                                                        <div>
-                                                            <span className="font-medium">
-                                                                {comment.user.full_name || comment.user.email}
-                                                            </span>
-                                                            <span className="text-sm text-muted-foreground ml-2">
-                                                                {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-muted-foreground ml-10">{comment.content}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Save Button */}
-                            <div className="mt-6">
-                                <Button onClick={handleSubmit} className="w-full">
-                                    {task ? 'Update Task' : 'Create Task'}
+                                <Button
+                                    variant={isWatching ? "secondary" : "outline"}
+                                    size="sm"
+                                    onClick={toggleWatch}
+                                >
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    {isWatching ? "Watching" : "Watch"}
                                 </Button>
                             </div>
+                            {task && (
+                                <div className="text-xs text-muted-foreground">
+                                    Created {new Date(task.created_at).toLocaleDateString()} by {task.created_by?.full_name || task.created_by?.email}
+                                </div>
+                            )}
+                        </div>
+                        <Input
+                            value={formData.title}
+                            onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                            placeholder="Task title"
+                            className="text-xl font-semibold mb-4"
+                        />
+                        <Textarea
+                            value={formData.description}
+                            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Add a description..."
+                            className="min-h-[100px] mb-6"
+                        />
+
+                        {/* Related Items Section */}
+                        {(task?.source_meeting_id || task?.source_note_id || task?.parent_id) && (
+                            <div className="mb-6">
+                                <h3 className="text-sm font-medium mb-2">Related Items</h3>
+                                <div className="space-y-2">
+                                    {task.source_meeting_id && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="text-muted-foreground">Source Meeting:</span>
+                                            <Button variant="link" className="h-auto p-0">
+                                                Meeting #{task.source_meeting_id}
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {task.source_note_id && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="text-muted-foreground">Source Note:</span>
+                                            <Button variant="link" className="h-auto p-0">
+                                                Note #{task.source_note_id}
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {task.parent_id && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="text-muted-foreground">Parent Task:</span>
+                                            <Button variant="link" className="h-auto p-0">
+                                                Task #{task.parent_id}
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Activity Section */}
+                        <div className="space-y-6">
+                            {task && <h2 className="text-lg font-semibold">Activity</h2>}
+
+                            {/* Comments Section */}
+                            {task && (
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-medium">Comments</h3>
+                                    <div className="flex gap-2">
+                                        <Textarea
+                                            placeholder="Add a comment..."
+                                            value={newComment}
+                                            onChange={(e) => setNewComment(e.target.value)}
+                                            className="flex-1"
+                                        />
+                                        <Button onClick={handleAddComment}>Add</Button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {task.comments?.map((comment) => (
+                                            <div key={comment.id} className="bg-muted/50 rounded-lg p-4">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <UserAvatar
+                                                        name={comment.user.full_name || comment.user.email}
+                                                        userId={comment.user.id.toString()}
+                                                        className="h-8 w-8"
+                                                    />
+                                                    <div>
+                                                        <span className="font-medium">
+                                                            {comment.user.full_name || comment.user.email}
+                                                        </span>
+                                                        <span className="text-sm text-muted-foreground ml-2">
+                                                            {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <p className="text-muted-foreground ml-10">{comment.content}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Save Button */}
+                        <div className="mt-6">
+                            <Button onClick={handleSubmit} className="w-full">
+                                {task ? 'Update Task' : 'Create Task'}
+                            </Button>
                         </div>
                     </div>
 
@@ -488,54 +527,23 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                             />
 
                             <DetailField
-                                label="Assignee"
+                                label="Assignees"
                                 value={
-                                    <Select
-                                        value={formData.assignee_id?.toString() || "unassigned"}
-                                        onValueChange={(value) => setFormData(prev => ({
-                                            ...prev,
-                                            assignee_id: value === "unassigned" ? undefined : value
-                                        }))}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue>
-                                                {formData.assignee_id ? (
-                                                    <div className="flex items-center gap-2">
-                                                        {task?.assignee && (
-                                                            <UserAvatar
-                                                                name={task.assignee.full_name || task.assignee.email}
-                                                                imageUrl={task.assignee.avatar_url}
-                                                                className="h-6 w-6"
-                                                            />
-                                                        )}
-                                                        <span>
-                                                            {teamMembers.find(m => m.id === formData.assignee_id)?.full_name ||
-                                                                teamMembers.find(m => m.id === formData.assignee_id)?.email ||
-                                                                'Unassigned'}
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    'Unassigned'
-                                                )}
-                                            </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="unassigned">
-                                                <span className="text-muted-foreground">Unassigned</span>
-                                            </SelectItem>
-                                            {teamMembers.map(member => (
-                                                <SelectItem key={member.id} value={member.id}>
-                                                    <div className="flex items-center gap-2">
-                                                        <UserAvatar
-                                                            name={member.full_name || member.email}
-                                                            className="h-6 w-6"
-                                                        />
-                                                        <span>{member.full_name || member.email}</span>
-                                                    </div>
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <UserCombobox
+                                        teamId={teamId}
+                                        selectedUsers={formData.assignees.map(a => a.id)}
+                                        onSelectionChange={(userIds) => {
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                assignees: userIds.map(id => ({
+                                                    id: id,
+                                                    email: teamMembers.find(m => m.id === id)?.email || '',
+                                                    full_name: teamMembers.find(m => m.id === id)?.full_name
+                                                }))
+                                            }));
+                                        }}
+                                        placeholder="Select assignees"
+                                    />
                                 }
                             />
 
@@ -545,6 +553,7 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                     <Popover
                                         open={isDueDatePopoverOpen}
                                         onOpenChange={setIsDueDatePopoverOpen}
+                                        modal={true}
                                     >
                                         <PopoverTrigger asChild>
                                             <Button
@@ -557,7 +566,13 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                                 {dueDate ? format(dueDate, 'PPP') : <span>Pick a date</span>}
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0" align="start">
+                                        <PopoverContent
+                                            className="w-auto p-0"
+                                            align="start"
+                                            side="bottom"
+                                            sideOffset={4}
+                                            style={calendarPopoverStyle}
+                                        >
                                             <Calendar
                                                 mode="single"
                                                 selected={dueDate}
@@ -578,6 +593,7 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                     <Popover
                                         open={isStartDatePopoverOpen}
                                         onOpenChange={setIsStartDatePopoverOpen}
+                                        modal={true}
                                     >
                                         <PopoverTrigger asChild>
                                             <Button
@@ -590,7 +606,13 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                                 {startDate ? format(startDate, 'PPP') : <span>Pick a date</span>}
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0" align="start">
+                                        <PopoverContent
+                                            className="w-auto p-0"
+                                            align="start"
+                                            side="bottom"
+                                            sideOffset={4}
+                                            style={calendarPopoverStyle}
+                                        >
                                             <Calendar
                                                 mode="single"
                                                 selected={startDate}
@@ -604,128 +626,6 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                     </Popover>
                                 }
                             />
-
-                            <DetailField
-                                label="Labels"
-                                value={
-                                    <div className="space-y-2">
-                                        <Popover open={isLabelPopoverOpen} onOpenChange={setIsLabelPopoverOpen}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    role="combobox"
-                                                    aria-expanded={isLabelPopoverOpen}
-                                                    className="w-full justify-between"
-                                                >
-                                                    <span className="truncate">
-                                                        {formData.labels?.length
-                                                            ? `${formData.labels.length} label${formData.labels.length === 1 ? '' : 's'} selected`
-                                                            : "Select labels..."}
-                                                    </span>
-                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-full p-0" align="start">
-                                                <Command>
-                                                    <div className="flex items-center border-b px-3">
-                                                        <CommandInput
-                                                            placeholder="Search labels..."
-                                                            value={searchQuery}
-                                                            onValueChange={handleLabelSearch}
-                                                            className="h-9 flex-1"
-                                                        />
-                                                        {searchQuery && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={handleCreateLabel}
-                                                                className="h-full px-2 text-xs"
-                                                            >
-                                                                Create
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                    <CommandEmpty className="py-2 px-3 text-sm">
-                                                        {searchQuery ? (
-                                                            <span className="text-muted-foreground">
-                                                                Press <span className="font-semibold">Create</span> to add "{searchQuery}"
-                                                            </span>
-                                                        ) : (
-                                                            "No labels found."
-                                                        )}
-                                                    </CommandEmpty>
-                                                    <CommandGroup className="max-h-[200px] overflow-auto">
-                                                        {labels.map(label => (
-                                                            <CommandItem
-                                                                key={label.id}
-                                                                value={label.name}
-                                                                onSelect={() => {
-                                                                    setFormData(prev => ({
-                                                                        ...prev,
-                                                                        labels: prev.labels?.includes(label.id)
-                                                                            ? prev.labels.filter(id => id !== label.id)
-                                                                            : [...(prev.labels || []), label.id]
-                                                                    }));
-                                                                }}
-                                                            >
-                                                                <div className="flex items-center gap-2 flex-1">
-                                                                    <Check
-                                                                        className={cn(
-                                                                            "h-4 w-4",
-                                                                            formData.labels?.includes(label.id) ? "opacity-100" : "opacity-0"
-                                                                        )}
-                                                                    />
-                                                                    <span
-                                                                        className="h-3 w-3 rounded-full"
-                                                                        style={{ backgroundColor: label.color }}
-                                                                    />
-                                                                    <span>{label.name}</span>
-                                                                </div>
-                                                            </CommandItem>
-                                                        ))}
-                                                    </CommandGroup>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-
-                                        {/* Selected Labels Display */}
-                                        {formData.labels && formData.labels.length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {formData.labels.map(labelId => {
-                                                    const label = labels.find(l => l.id === labelId);
-                                                    if (!label) return null;
-                                                    return (
-                                                        <div
-                                                            key={label.id}
-                                                            className="group flex items-center gap-1 text-xs rounded-full px-2 py-1 hover:saturate-150 transition-all"
-                                                            style={{ backgroundColor: `${label.color}20` }}
-                                                        >
-                                                            <span
-                                                                className="w-2 h-2 rounded-full"
-                                                                style={{ backgroundColor: label.color }}
-                                                            />
-                                                            <span style={{ color: label.color }}>{label.name}</span>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setFormData(prev => ({
-                                                                        ...prev,
-                                                                        labels: prev.labels?.filter(id => id !== label.id) || []
-                                                                    }));
-                                                                }}
-                                                                className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"
-                                                            >
-                                                                ×
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                }
-                            />
-
-
                         </div>
                     </div>
                 </div>

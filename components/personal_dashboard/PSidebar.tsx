@@ -115,28 +115,6 @@ export default function PSidebar({ activeSection, setActiveSection }: PSidebarPr
                             )}>Meetings</span>
                         </div>
                     </Button>
-                    <Button
-                        variant={activeSection === 'analytics-section' ? 'secondary' : 'ghost'}
-                        className={cn(
-                            "w-full justify-start",
-                            activeSection === 'analytics-section' && "bg-gradient-to-r from-green-50 to-indigo-50 text-indigo-900"
-                        )}
-                        onClick={() => {
-                            const element = document.getElementById('analytics-section')
-                            element?.scrollIntoView({ behavior: 'smooth' })
-                        }}
-                    >
-                        <div className="flex items-center gap-3">
-                            <BarChart2 className={cn(
-                                "h-4 w-4",
-                                activeSection === 'analytics-section' ? "text-indigo-600" : "text-muted-foreground"
-                            )} />
-                            <span className={cn(
-                                activeSection === 'analytics-section' ? "font-medium" : "text-muted-foreground"
-                            )}>Analytics</span>
-                        </div>
-                    </Button>
-
                     <div className="pt-4 mt-4 border-t border-border/60">
                         <Button variant="ghost" className="w-full justify-start opacity-70 hover:opacity-100">
                             <div className="flex items-center gap-3">
