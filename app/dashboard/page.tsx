@@ -15,20 +15,52 @@ import { meetingApi } from '@/services/meetingApi';
 import { auth } from '@/services/api';
 import { teamApi } from '@/services/teamApi';
 import { mapPriorityToEnum, mapTaskStatus, mapTaskPriority, mapStatusToEnum } from '@/utils/taskMappings';
+import { TaskType } from "@/lib/types/task"
+import { TaskPriority } from "@/lib/types/task"
+import { TaskStatus } from "@/lib/types/task"
 
 type Task = {
     id: string;
     taskId: string;
     title: string;
-    category: string;
-    status: 'To Do' | 'In Progress' | 'Done' | 'Backlog' | 'Canceled';
-    dueDate: string;
-    priority: 'High' | 'Medium' | 'Low';
+    description?: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    type: TaskType;
+    start_date?: string;
+    due_date?: string;
+    assignee?: {
+        id: string;
+        email: string;
+        full_name?: string;
+        avatar_url?: string;
+    };
+    category?: string;
+    team_id: number;
+    team_ref_number?: string;
+    created_at: string;
+    created_by?: {
+        id: string;
+        email: string;
+        full_name?: string;
+    };
+    comments?: Array<{
+        id: number;
+        content: string;
+        user: {
+            id: string;
+            email: string;
+            full_name?: string;
+        };
+        created_at: string;
+    }>;
+    labels?: string[];
+    task_metadata?: Record<string, any>;
+    // Personal dashboard specific fields
     importance: 'important' | 'normal';
     urgency: 'urgent' | 'not-urgent';
     quadrant: 'important-urgent' | 'important-not-urgent' | 'not-important-urgent' | 'not-important-not-urgent' | 'unsorted';
-    team_id: number;
-    tag: string;
+    order_in_quadrant?: number;
 };
 
 type Meeting = {
@@ -71,29 +103,22 @@ export default function DashboardPage() {
                     const currentTeamId = userTeams[0].id;
                     setTeamId(currentTeamId);
 
-                    // Fetch tasks
+                    // Fetch tasks with full data
                     const tasksData = await taskApi.listTasks(currentTeamId);
                     console.log('Raw tasks data:', tasksData);
 
                     const tasksWithPreferences = await Promise.all(tasksData.map(async task => {
                         const preferences = await taskApi.getPersonalPreferences(task.id);
-                        console.log(`Preferences for task ${task.id}:`, preferences);
                         return {
-                            id: task.id.toString(),
-                            taskId: `TASK-${task.team_ref_number}`,
-                            title: task.title,
-                            category: task.category || 'Other',
-                            status: mapTaskStatus(task.status),
-                            dueDate: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '',
-                            priority: mapTaskPriority(task.priority),
+                            ...task, // Keep all original task data
                             importance: preferences.importance ? 'important' : 'normal',
                             urgency: preferences.urgency ? 'urgent' : 'not-urgent',
                             quadrant: preferences.quadrant,
-                            team_id: currentTeamId,
-                            tag: task.category || 'Other',
-                            order_in_quadrant: preferences.order_in_quadrant || 0
+                            order_in_quadrant: preferences.order_in_quadrant || 0,
+                            taskId: `T-${task.team_ref_number}`,
                         };
                     }));
+
                     console.log('Tasks with preferences:', tasksWithPreferences);
                     setTasks(tasksWithPreferences);
 
@@ -148,32 +173,13 @@ export default function DashboardPage() {
     const handleTaskUpdate = async (updatedTasks: Task[] | Task) => {
         if (!teamId) return;
 
-        try {
-            // If we receive a single task, convert it to an array
-            const taskArray = Array.isArray(updatedTasks) ? updatedTasks : [updatedTasks];
-
-            // Filter out any null/undefined tasks
-            const validTasks = taskArray.filter(task => task != null);
-
-            if (validTasks.length === 0) {
-                console.warn('No valid tasks to update');
-                return;
-            }
-
-            // Update the tasks state while preserving other tasks
-            setTasks(prevTasks => {
-                const updatedTaskMap = new Map(validTasks.map(task => [task.id, task]));
-
-                return prevTasks.map(task =>
-                    updatedTaskMap.has(task.id)
-                        ? updatedTaskMap.get(task.id)!
-                        : task
-                );
-            });
-
-        } catch (error) {
-            console.error('Error updating tasks:', error);
-        }
+        const taskArray = Array.isArray(updatedTasks) ? updatedTasks : [updatedTasks];
+        setTasks(prevTasks => {
+            const updatedTaskMap = new Map(taskArray.map(task => [task.id, task]));
+            return prevTasks.map(task =>
+                updatedTaskMap.has(task.id) ? updatedTaskMap.get(task.id)! : task
+            );
+        });
     };
 
     // Handle meeting updates

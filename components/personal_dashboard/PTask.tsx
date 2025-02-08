@@ -42,8 +42,8 @@ import { DialogContent } from "../ui/dialog"
 import { DialogTitle } from "../ui/dialog"
 import { DialogHeader } from "../ui/dialog"
 import { Dialog } from "@radix-ui/react-dialog"
-import { labelApi } from '@/services/labelApi'
 import { TaskPriority, TaskStatus } from '@/lib/types/task'
+import { toast } from "@/hooks/use-toast"
 
 type Task = {
     id: string;
@@ -73,17 +73,13 @@ type Task = {
     };
     tag: string;
     order_in_quadrant?: number;
+    labels?: string[];
+    team_ref_number?: string;
 };
 
 type PTaskProps = {
     tasks: Task[];
     setTasks: (tasks: Task[]) => void;
-    updateTaskQuadrant?: (
-        taskId: string,
-        quadrant: Task['quadrant'],
-        importance: Task['importance'],
-        urgency: Task['urgency']
-    ) => void;
     searchTerm: string;
 };
 
@@ -286,7 +282,7 @@ export default function PTask({ tasks, setTasks, searchTerm }: PTaskProps) {
 
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'taskId', direction: 'asc' });
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-    const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [isTaskDetailOpen, setIsTaskDetailOpen] = useState(false);
     const [tableFilter, setTableFilter] = useState("");
 
     const [groupBy, setGroupBy] = useState<GroupBy>('none');
@@ -297,6 +293,8 @@ export default function PTask({ tasks, setTasks, searchTerm }: PTaskProps) {
         category: [] as string[],
         assignee: [] as string[],
     });
+
+    const [selectedTask, setSelectedTask] = useState<Task | undefined>(undefined);
 
     // Fetch teams on component mount
     useEffect(() => {
@@ -687,31 +685,75 @@ export default function PTask({ tasks, setTasks, searchTerm }: PTaskProps) {
             return true;
         });
 
-    const updateTaskDetails = async (updatedTask: Task) => {
+    const handleTaskUpdate = async (updatedTask: Task) => {
+        if (!selectedTeam) return;
+
         try {
-            const updateData = {
-                title: updatedTask.title,
-                description: updatedTask.description,
-                status: updatedTask.status,
-                priority: updatedTask.priority,
-                category: updatedTask.category,
-                due_date: updatedTask.due_date,
-                assignee_id: updatedTask.assignee?.id,
-                type: updatedTask.type
-            };
+            if (!updatedTask.id) {
+                const createdTask = await taskApi.createTask(selectedTeam, {
+                    title: updatedTask.title,
+                    description: updatedTask.description || '',
+                    status: updatedTask.status,
+                    priority: updatedTask.priority,
+                    type: updatedTask.type,
+                    start_date: updatedTask.start_date,
+                    due_date: updatedTask.due_date,
+                    assignee_id: updatedTask.assignee?.id,
+                    category: updatedTask.category,
+                });
 
-            const response = await taskApi.updateTask(selectedTeam || 0, Number(updatedTask.id), updateData);
+                // Add personal preferences
+                await taskApi.updatePersonalPreferences(createdTask.id, {
+                    importance: updatedTask.importance === 'important',
+                    urgency: updatedTask.urgency === 'urgent',
+                    quadrant: updatedTask.quadrant,
+                    order_in_quadrant: updatedTask.order_in_quadrant || 0
+                });
 
-            // Update local state
-            setTasks(prevTasks =>
-                prevTasks.map(task =>
-                    task.id === updatedTask.id ? response : task
-                )
-            );
+                setTasks([{
+                    ...createdTask,
+                    importance: updatedTask.importance,
+                    urgency: updatedTask.urgency,
+                    quadrant: updatedTask.quadrant,
+                    order_in_quadrant: updatedTask.order_in_quadrant
+                }]);
+            } else {
+                const updatedTaskData = await taskApi.updateTask(selectedTeam, Number(updatedTask.id), {
+                    title: updatedTask.title,
+                    description: updatedTask.description,
+                    status: updatedTask.status,
+                    priority: updatedTask.priority,
+                    type: updatedTask.type,
+                    start_date: updatedTask.start_date,
+                    due_date: updatedTask.due_date,
+                    assignee_id: updatedTask.assignee?.id,
+                    category: updatedTask.category,
+                });
 
+                // Update personal preferences if they changed
+                await taskApi.updatePersonalPreferences(updatedTask.id, {
+                    importance: updatedTask.importance === 'important',
+                    urgency: updatedTask.urgency === 'urgent',
+                    quadrant: updatedTask.quadrant,
+                    order_in_quadrant: updatedTask.order_in_quadrant || 0
+                });
+
+                setTasks(updatedTaskData);
+            }
+
+            toast({
+                title: updatedTask.id ? "Task updated" : "Task created",
+                description: updatedTask.id
+                    ? "The task has been updated successfully."
+                    : "The new task has been created successfully."
+            });
         } catch (error) {
-            console.error('Failed to update task:', error);
-            throw error;
+            console.error('Failed to handle task update:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update task. Please try again.",
+                variant: "destructive"
+            });
         }
     };
 
@@ -1068,12 +1110,12 @@ export default function PTask({ tasks, setTasks, searchTerm }: PTaskProps) {
                                             <TableRow
                                                 key={task.id}
                                                 className={cn(
-                                                    "cursor-pointer hover:bg-muted/50",
-                                                    task.status === TaskStatus.DONE && 'bg-muted/30'
+                                                    "cursor-pointer hover:bg-accent/50",
+                                                    task.status === TaskStatus.DONE && 'bg-accent/30'
                                                 )}
                                                 onClick={() => {
-                                                    setSelectedTaskId(task.id);
-                                                    setIsDetailOpen(true);
+                                                    setSelectedTask(task);
+                                                    setIsTaskDetailOpen(true);
                                                 }}
                                             >
                                                 <TableCell className="font-medium">
@@ -1163,13 +1205,14 @@ export default function PTask({ tasks, setTasks, searchTerm }: PTaskProps) {
 
                     {/* Task Detail */}
                     <TaskDetail
-                        isOpen={isDetailOpen}
+                        isOpen={isTaskDetailOpen}
                         onClose={() => {
-                            setIsDetailOpen(false);
-                            setSelectedTaskId(null);
+                            setIsTaskDetailOpen(false);
+                            setSelectedTask(undefined);
                         }}
-                        task={tasks.find(t => t.id === selectedTaskId)}
                         teamId={selectedTeam || 0}
+                        task={selectedTask}
+                        onTaskUpdate={handleTaskUpdate}
                     />
                 </TabsContent>
             </Tabs>
