@@ -171,7 +171,10 @@ export const taskApi = {
 
     // Get a single task
     getTask: async (teamId: number, taskId: number): Promise<Task> => {
-        const { data, error } = await supabase
+        console.log('Getting task:', { teamId, taskId });
+
+        // First get the task data
+        const { data: taskData, error: taskError } = await supabase
             .from('tasks')
             .select(`
                 *,
@@ -189,30 +192,49 @@ export const taskApi = {
                         full_name,
                         avatar_url
                     )
-                ),
-                comments:task_comments!task_id(
-                    id,
-                    content,
-                    created_at,
-                    updated_at,
-                    parent_id,
-                    user:user_id(
-                        supabase_uid,
-                        email,
-                        full_name
-                    )
                 )
             `)
             .eq('team_id', teamId)
             .eq('id', taskId)
             .single();
 
-        if (error) throw error;
+        if (taskError) {
+            console.error('Error getting task:', taskError);
+            throw taskError;
+        }
+
+        // Then get the comments separately
+        const { data: comments, error: commentsError } = await supabase
+            .from('task_comments')
+            .select(`
+                id,
+                task_id,
+                content,
+                created_at,
+                updated_at,
+                parent_id,
+                user:user_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                )
+            `)
+            .eq('task_id', taskId)
+            .order('created_at', { ascending: true });
+
+        if (commentsError) {
+            console.error('Error getting comments:', commentsError);
+            throw commentsError;
+        }
+
+        console.log('Raw task data:', taskData);
+        console.log('Raw comments:', comments);
 
         // Transform the response to match Task interface
-        return {
-            ...data,
-            assignees: data.task_assignments
+        const transformedTask = {
+            ...taskData,
+            id: taskData.id.toString(), // Convert id to string
+            assignees: taskData.task_assignments
                 .filter((ta: any) => ta.role === 'ASSIGNEE')
                 .map((ta: any) => ({
                     id: ta.users.supabase_uid,
@@ -220,7 +242,7 @@ export const taskApi = {
                     full_name: ta.users.full_name,
                     avatar_url: ta.users.avatar_url
                 })),
-            watchers: data.task_assignments
+            watchers: taskData.task_assignments
                 .filter((ta: any) => ta.role === 'WATCHER')
                 .map((ta: any) => ({
                     id: ta.users.supabase_uid,
@@ -228,13 +250,18 @@ export const taskApi = {
                     full_name: ta.users.full_name,
                     avatar_url: ta.users.avatar_url
                 })),
-            created_by: data.created_by ? {
-                id: data.created_by.supabase_uid,
-                email: data.created_by.email,
-                full_name: data.created_by.full_name
+            created_by: taskData.created_by ? {
+                id: taskData.created_by.supabase_uid,
+                email: taskData.created_by.email,
+                full_name: taskData.created_by.full_name
             } : undefined,
-            comments: data.comments?.map((c: any) => ({
-                ...c,
+            comments: comments?.map((c: any) => ({
+                id: c.id,
+                content: c.content,
+                task_id: c.task_id,
+                created_at: c.created_at,
+                updated_at: c.updated_at,
+                parent_id: c.parent_id,
                 user: {
                     id: c.user.supabase_uid,
                     email: c.user.email,
@@ -242,6 +269,9 @@ export const taskApi = {
                 }
             })) || []
         };
+
+        console.log('Transformed task:', transformedTask);
+        return transformedTask;
     },
 
     // Create a new task
@@ -468,13 +498,17 @@ export const taskApi = {
             .from('task_comments')
             .insert({
                 task_id: taskId,
-                user_id: user.id,
+                user_id: user.id,  // This is already the supabase_uid
                 content,
                 parent_id: parentId,
                 created_at: new Date().toISOString()
             })
             .select(`
-                *,
+                id,
+                content,
+                created_at,
+                updated_at,
+                parent_id,
                 user:user_id(
                     supabase_uid,
                     email,
@@ -483,10 +517,18 @@ export const taskApi = {
             `)
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('Error adding comment:', error);
+            throw error;
+        }
 
         return {
-            ...comment,
+            id: comment.id,
+            content: comment.content,
+            task_id: taskId,
+            created_at: comment.created_at,
+            updated_at: comment.updated_at,
+            parent_id: comment.parent_id,
             user: {
                 id: comment.user.supabase_uid,
                 email: comment.user.email,
@@ -527,15 +569,43 @@ export const taskApi = {
         };
     },
 
-    // Delete a comment
+    // Delete a comment and all its replies
     deleteComment: async (teamId: number, taskId: number, commentId: number): Promise<void> => {
-        const { error } = await supabase
-            .from('task_comments')
-            .delete()
-            .eq('id', commentId)
-            .eq('task_id', taskId);
+        // First, get all child comments recursively
+        const getAllChildCommentIds = async (parentId: number): Promise<number[]> => {
+            const { data: children } = await supabase
+                .from('task_comments')
+                .select('id')
+                .eq('task_id', taskId)
+                .eq('parent_id', parentId);
 
-        if (error) throw error;
+            if (!children || children.length === 0) return [];
+
+            const childIds = children.map(c => c.id);
+            const grandChildIds = await Promise.all(
+                childIds.map(id => getAllChildCommentIds(id))
+            );
+
+            return [...childIds, ...grandChildIds.flat()];
+        };
+
+        try {
+            // Get all child comment IDs
+            const childCommentIds = await getAllChildCommentIds(commentId);
+            const allCommentIds = [commentId, ...childCommentIds];
+
+            // Delete all comments in a single operation
+            const { error } = await supabase
+                .from('task_comments')
+                .delete()
+                .in('id', allCommentIds)
+                .eq('task_id', taskId);
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error deleting comments:', error);
+            throw error;
+        }
     },
 
     // Get personal preferences for a task

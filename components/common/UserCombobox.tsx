@@ -46,6 +46,10 @@ export function UserCombobox({ teamId, selectedUsers, onSelectionChange, placeho
         };
 
         loadUsers();
+        console.log('teamId', teamId);
+        console.log('open', open);
+        console.log('users', users);
+
     }, [teamId]);
 
     const selectedUserObjects = users.filter(user => selectedUsers.includes(user.id));
@@ -64,13 +68,13 @@ export function UserCombobox({ teamId, selectedUsers, onSelectionChange, placeho
 
     return (
         <div className="space-y-2">
-            <Popover open={open} onOpenChange={setOpen} modal={true}>
+            <Popover open={open} onOpenChange={setOpen} >
                 <PopoverTrigger asChild>
                     <Button
                         variant="outline"
                         role="combobox"
                         aria-expanded={open}
-                        className="w-full justify-between"
+                        className="w-full justify-between "
                     >
                         {selectedUsers.length === 0 ? (
                             <span className="text-muted-foreground">{placeholder || "Select users..."}</span>
@@ -82,8 +86,9 @@ export function UserCombobox({ teamId, selectedUsers, onSelectionChange, placeho
                 </PopoverTrigger>
                 <PopoverContent
                     className="w-full p-2"
-                    style={{ zIndex: 99999, position: 'relative' }}
+                    style={{ zIndex: 100001 }}
                     sideOffset={4}
+                    align="start"
                 >
                     <div className="max-h-64 overflow-auto space-y-1">
                         {users.map((user) => (
@@ -94,6 +99,7 @@ export function UserCombobox({ teamId, selectedUsers, onSelectionChange, placeho
                                     "flex items-center gap-2 w-full p-2 rounded-md cursor-pointer hover:bg-accent",
                                     selectedUsers.includes(user.id) && "bg-accent"
                                 )}
+                                style={{ pointerEvents: 'auto' }}
                             >
                                 <UserAvatar
                                     userId={user.id}

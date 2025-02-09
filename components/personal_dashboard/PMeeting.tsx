@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "../ui/button"
-import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "../ui/sheet"
-import { Plus, Calendar as CalendarIcon, Clock, Users } from "lucide-react"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "../ui/sheet"
+import { Plus, Calendar as CalendarIcon, Clock, Users, ArrowRight, MoreVertical, Trash2, UserPlus } from "lucide-react"
 import { Label } from "../ui/label"
 import { Input } from "../ui/input"
-import { Meeting as APIMeeting, MeetingType, MeetingStatus } from "@/lib/types/meeting"
-import { teamApi } from '@/services/teamApi'
+import { Meeting as APIMeeting, MeetingType } from "@/lib/types/meeting"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../ui/select"
 import { meetingApi } from '@/services/meetingApi'
 import { UserAvatar } from "@/components/common/UserAvatar"
@@ -13,92 +12,116 @@ import { Card } from "../ui/card"
 import { format, isToday, isTomorrow, isThisWeek, isAfter, parseISO } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { UserCombobox } from "@/components/common/UserCombobox"
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover"
+import { Calendar } from "../ui/calendar"
+import { EmptyState } from "../common/EmptyState"
+import { useRouter } from "next/navigation"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu"
+import { MeetingParticipantsModal } from "../meetings/MeetingParticipantsModal"
+import { MeetingDetail } from "../meetings/MeetingDetail"
 
 // Use the API Meeting type directly
 type Meeting = APIMeeting;
 
-export default function PMeeting() {
-    const [meetings, setMeetings] = useState<Meeting[]>([]);
-    const [teams, setTeams] = useState<{ id: number, name: string }[]>([]);
-    const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+interface Team {
+    id: number;
+    name: string;
+}
+
+interface PMeetingProps {
+    meetings: Meeting[];
+    teams: Team[];
+    onMeetingUpdate: (meetings: Meeting[]) => void;
+}
+
+// Update the calendar popover style
+const calendarPopoverStyle: React.CSSProperties = {
+    zIndex: 99999999,
+    position: 'relative'
+};
+
+export default function PMeeting({ meetings, teams, onMeetingUpdate }: PMeetingProps) {
+    const router = useRouter();
+    const [selectedDisplayTeam, setSelectedDisplayTeam] = useState<string>("all");
+    const [selectedCreateTeam, setSelectedCreateTeam] = useState<number | null>(null);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [selectedDate, setSelectedDate] = useState<Date>();
+    const [selectedTime, setSelectedTime] = useState<string>("09:00");
+    const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+    const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
+    const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
+    const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+    const [selectedMeetingForDetail, setSelectedMeetingForDetail] = useState<Meeting | null>(null);
     const { toast } = useToast();
 
-    // Fetch teams and meetings on component mount
-    useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            try {
-                const userTeams = await teamApi.getUserTeams();
-                console.log('Fetched teams:', userTeams);
-                setTeams(userTeams);
-                if (userTeams.length > 0) {
-                    setSelectedTeam(userTeams[0].id);
-                    const teamMeetings = await meetingApi.listMeetings(userTeams[0].id);
-                    console.log('Fetched meetings:', teamMeetings);
-                    setMeetings(teamMeetings);
-                } else {
-                    console.log('No teams found');
-                }
-            } catch (error) {
-                console.error('Error fetching data:', error);
-                toast({
-                    title: "Error",
-                    description: "Failed to load meetings",
-                    variant: "destructive"
-                });
-            } finally {
-                setIsLoading(false);
-            }
-        };
+    // Filter meetings based on selected team
+    const filteredMeetings = selectedDisplayTeam === "all"
+        ? meetings
+        : meetings.filter(meeting => meeting.team_id === Number(selectedDisplayTeam));
 
-        fetchData();
-    }, []);
+    // Group meetings by time
+    const now = new Date();
+    const groupedMeetings = {
+        current: filteredMeetings.filter(m => {
+            const meetingStart = parseISO(m.start_time);
+            const meetingEnd = new Date(meetingStart.getTime() + m.duration_minutes * 60000);
+            return isAfter(meetingEnd, now) && !isAfter(meetingStart, now);
+        }),
+        today: filteredMeetings.filter(m => isToday(parseISO(m.start_time)) && isAfter(parseISO(m.start_time), now)),
+        tomorrow: filteredMeetings.filter(m => isTomorrow(parseISO(m.start_time))),
+        thisWeek: filteredMeetings.filter(m => isThisWeek(parseISO(m.start_time)) && !isToday(parseISO(m.start_time)) && !isTomorrow(parseISO(m.start_time))),
+        upcoming: filteredMeetings.filter(m => {
+            const meetingDate = parseISO(m.start_time);
+            return isAfter(meetingDate, now) && !isToday(meetingDate) && !isTomorrow(meetingDate) && !isThisWeek(meetingDate);
+        })
+    };
 
-    // Update meetings when team changes
-    useEffect(() => {
-        const fetchMeetings = async () => {
-            if (selectedTeam) {
-                setIsLoading(true);
-                try {
-                    const teamMeetings = await meetingApi.listMeetings(selectedTeam);
-                    console.log('Team changed, fetched meetings:', teamMeetings);
-                    setMeetings(teamMeetings);
-                } catch (error) {
-                    console.error('Error fetching meetings:', error);
-                    toast({
-                        title: "Error",
-                        description: "Failed to load meetings",
-                        variant: "destructive"
-                    });
-                } finally {
-                    setIsLoading(false);
-                }
-            }
-        };
+    const handleCreateModalOpen = () => {
+        if (selectedDisplayTeam === "all") {
+            // If "All Teams" is selected, use the first team as default
+            setSelectedCreateTeam(teams[0]?.id || null);
+        } else {
+            setSelectedCreateTeam(Number(selectedDisplayTeam));
+        }
+        setIsCreateModalOpen(true);
+    };
 
-        fetchMeetings();
-    }, [selectedTeam]);
+    const handleCreateModalClose = () => {
+        setIsCreateModalOpen(false);
+        setSelectedCreateTeam(null);
+        setSelectedDate(undefined);
+        setSelectedTime("09:00");
+        setSelectedParticipants([]);
+    };
 
-    const addMeeting = async (data: {
-        title: string,
-        description?: string,
-        start_time: string,
-        duration_minutes: number,
-        participant_ids: string[]
-    }) => {
-        if (!selectedTeam) return;
+    const addMeeting = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!selectedCreateTeam || !selectedDate) return;
+
+        const formData = new FormData(e.currentTarget);
+        const startTime = `${format(selectedDate, 'yyyy-MM-dd')}T${selectedTime}:00`;
 
         try {
-            const createdMeeting = await meetingApi.createMeeting(selectedTeam, {
-                ...data,
+            const createdMeeting = await meetingApi.createMeeting(selectedCreateTeam, {
+                title: formData.get("title") as string,
+                description: formData.get("description") as string,
+                start_time: startTime,
+                duration_minutes: parseInt(formData.get("duration") as string),
+                participant_ids: selectedParticipants,
                 type: MeetingType.OTHER
             });
-            setMeetings(prev => [...prev, createdMeeting]);
+
+            // Update meetings through the parent component
+            onMeetingUpdate([...meetings, createdMeeting]);
+            handleCreateModalClose();
             toast({
                 title: "Success",
                 description: "Meeting scheduled successfully"
             });
+
+            // Navigate to the newly created meeting
+            router.push(`/dashboard/${selectedCreateTeam}/meetings/${createdMeeting.id}`);
         } catch (error) {
             console.error('Error creating meeting:', error);
             toast({
@@ -109,45 +132,76 @@ export default function PMeeting() {
         }
     };
 
-    // Group meetings by time
-    const now = new Date();
-    const groupedMeetings = {
-        today: meetings.filter(m => isToday(parseISO(m.start_time))),
-        tomorrow: meetings.filter(m => isTomorrow(parseISO(m.start_time))),
-        thisWeek: meetings.filter(m => isThisWeek(parseISO(m.start_time)) && !isToday(parseISO(m.start_time)) && !isTomorrow(parseISO(m.start_time))),
-        upcoming: meetings.filter(m => {
-            const meetingDate = parseISO(m.start_time);
-            return isAfter(meetingDate, now);
-        }),
-        past: meetings.filter(m => {
-            const meetingDate = parseISO(m.start_time);
-            return !isAfter(meetingDate, now) && !isToday(meetingDate);
-        })
+    const handleDeleteMeeting = async (meetingId: number) => {
+        const teamId = Number(selectedDisplayTeam);
+        if (!teamId) return;
+
+        try {
+            await meetingApi.updateMeeting(teamId, meetingId, {
+                status: 'CANCELLED'
+            });
+
+            // Update through parent component
+            const updatedMeetings = meetings.filter(m => m.id !== meetingId);
+            onMeetingUpdate(updatedMeetings);
+
+            toast({
+                title: "Success",
+                description: "Meeting cancelled successfully"
+            });
+        } catch (error) {
+            console.error('Error cancelling meeting:', error);
+            toast({
+                title: "Error",
+                description: "Failed to cancel meeting",
+                variant: "destructive"
+            });
+        }
     };
 
-    console.log('Current date:', now.toISOString());
-    console.log('Meeting dates:', meetings.map(m => ({
-        date: m.start_time,
-        isAfter: isAfter(parseISO(m.start_time), now),
-        isToday: isToday(parseISO(m.start_time)),
-        isTomorrow: isTomorrow(parseISO(m.start_time)),
-        isThisWeek: isThisWeek(parseISO(m.start_time)),
-        isPast: !isAfter(parseISO(m.start_time), now) && !isToday(parseISO(m.start_time))
-    })));
-    console.log('Grouped meetings:', {
-        today: groupedMeetings.today.length,
-        tomorrow: groupedMeetings.tomorrow.length,
-        thisWeek: groupedMeetings.thisWeek.length,
-        upcoming: groupedMeetings.upcoming.length,
-        past: groupedMeetings.past.length
-    });
-
     const MeetingCard = ({ meeting }: { meeting: Meeting }) => (
-        <Card className="p-4 mb-3 hover:shadow-md transition-shadow relative z-10">
+        <Card
+            className="p-4 mb-3 hover:shadow-md transition-all duration-200 cursor-pointer bg-white border-l-4 border-l-indigo-500 group"
+            onClick={() => setSelectedMeetingForDetail(meeting)}
+        >
             <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                    <h3 className="font-medium">TITLE: {meeting.title}</h3>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="space-y-2 flex-1">
+                    <div className="flex items-center justify-between">
+                        <h3 className="font-medium text-lg group flex items-center">
+                            {meeting.title}
+                            <ArrowRight className="h-4 w-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </h3>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100">
+                                    <MoreVertical className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedMeeting(meeting);
+                                        setIsParticipantsModalOpen(true);
+                                    }}
+                                >
+                                    <UserPlus className="h-4 w-4 mr-2" />
+                                    Manage Participants
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    className="text-red-600"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteMeeting(meeting.id);
+                                    }}
+                                >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Cancel Meeting
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                             <CalendarIcon className="h-4 w-4" />
                             {format(parseISO(meeting.start_time), 'MMM d, yyyy')}
@@ -178,7 +232,7 @@ export default function PMeeting() {
                     </div>
                 </div>
                 {meeting.description && (
-                    <div className="text-sm text-muted-foreground mt-2">
+                    <div className="text-sm text-muted-foreground max-w-[30%] truncate">
                         {meeting.description}
                     </div>
                 )}
@@ -188,8 +242,8 @@ export default function PMeeting() {
 
     const TimelineSection = ({ title, meetings }: { title: string, meetings: Meeting[] }) => (
         meetings.length > 0 ? (
-            <div className="mb-8 relative z-10">
-                <h3 className="text-lg font-semibold mb-4">{title}</h3>
+            <div className="mb-8">
+                <h3 className="text-lg font-semibold mb-4 text-gray-800">{title}</h3>
                 <div className="space-y-3">
                     {meetings.map(meeting => (
                         <MeetingCard key={meeting.id} meeting={meeting} />
@@ -198,126 +252,241 @@ export default function PMeeting() {
             </div>
         ) : null
     );
-    console.log("Meetings", meetings)
+
+    if (teams.length === 0) {
+        return (
+            <EmptyState
+                title="Welcome to Meetings"
+                description="Join or create your first team to start scheduling meetings"
+                action={
+                    <Button onClick={() => router.push("/teams")}>
+                        Join or Create Team
+                    </Button>
+                }
+            />
+        );
+    }
+
     return (
         <div className="relative min-h-[200px]">
-            {/* Background gradient */}
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 opacity-40 z-0" />
-
-            {/* Content */}
-            <div className="relative z-10">
+            <div className="relative">
                 <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold">Meetings ({meetings.length} total)</h2>
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button>
-                                <Plus className="mr-2 h-4 w-4" /> Schedule Meeting
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent className="z-50">
-                            <SheetHeader>
-                                <SheetTitle>Schedule New Meeting</SheetTitle>
-                                <SheetDescription>Fill in the details to schedule a new meeting.</SheetDescription>
-                            </SheetHeader>
-                            <form
-                                onSubmit={(e) => {
-                                    e.preventDefault();
-                                    if (!selectedTeam) {
-                                        toast({
-                                            title: "Error",
-                                            description: "Please select a team",
-                                            variant: "destructive"
-                                        });
-                                        return;
-                                    }
-                                    const formData = new FormData(e.currentTarget);
-                                    const startTime = `${formData.get("date")}T${formData.get("time")}:00`;
-                                    addMeeting({
-                                        title: formData.get("title") as string,
-                                        description: formData.get("description") as string,
-                                        start_time: startTime,
-                                        duration_minutes: parseInt(formData.get("duration") as string),
-                                        participant_ids: (formData.get("participants") as string).split(",").map(p => p.trim())
-                                    });
-                                    e.currentTarget.reset();
-                                }}
-                                className="space-y-4 mt-4"
-                            >
-                                <div className="space-y-2">
-                                    <Label htmlFor="team">Team</Label>
-                                    <Select
-                                        value={selectedTeam?.toString() || ''}
-                                        onValueChange={(value) => setSelectedTeam(Number(value))}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select team" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {teams.map((team) => (
-                                                <SelectItem key={team.id} value={team.id.toString()}>
-                                                    {team.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="title">Title</Label>
-                                    <Input id="title" name="title" required />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="description">Description</Label>
-                                    <Input id="description" name="description" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="date">Date</Label>
-                                    <Input id="date" name="date" type="date" required />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="time">Time</Label>
-                                    <Input id="time" name="time" type="time" required />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="duration">Duration (minutes)</Label>
-                                    <Input id="duration" name="duration" type="number" min="15" step="15" defaultValue="30" required />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="participants">Participant IDs (comma-separated)</Label>
-                                    <Input id="participants" name="participants" required />
-                                </div>
-                                <Button type="submit" className="w-full">Schedule Meeting</Button>
-                            </form>
-                        </SheetContent>
-                    </Sheet>
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Meetings</h2>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            {filteredMeetings.length} upcoming meetings
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <Select
+                            value={selectedDisplayTeam}
+                            onValueChange={setSelectedDisplayTeam}
+                        >
+                            <SelectTrigger className="w-[200px] hover:cursor-pointer">
+                                <SelectValue placeholder="Select team" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Teams</SelectItem>
+                                {teams.map((team) => (
+                                    <SelectItem key={team.id} value={team.id.toString()}>
+                                        {team.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Button
+                            onClick={handleCreateModalOpen}
+                            disabled={teams.length === 0}
+                            className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                            <Plus className="mr-2 h-4 w-4" /> Schedule Meeting
+                        </Button>
+                    </div>
                 </div>
 
-                {isLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
-                    </div>
-                ) : meetings.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                        No meetings scheduled
-                    </div>
-                ) : (
-                    <div className="space-y-6">
-                        <TimelineSection title="Today" meetings={groupedMeetings.today} />
-                        <TimelineSection title="Tomorrow" meetings={groupedMeetings.tomorrow} />
-                        <TimelineSection title="This Week" meetings={groupedMeetings.thisWeek} />
-                        <TimelineSection title="Upcoming" meetings={groupedMeetings.upcoming} />
-                        <TimelineSection title="Past Meetings" meetings={groupedMeetings.past} />
-                        {groupedMeetings.today.length === 0 &&
-                            groupedMeetings.tomorrow.length === 0 &&
-                            groupedMeetings.thisWeek.length === 0 &&
-                            groupedMeetings.upcoming.length === 0 &&
-                            groupedMeetings.past.length === 0 && (
-                                <div className="text-center py-8 text-muted-foreground">
-                                    No meetings in any category
-                                </div>
-                            )}
-                    </div>
-                )}
+                <Sheet open={isCreateModalOpen} onOpenChange={handleCreateModalClose}>
+                    <SheetContent className="sm:max-w-[540px]">
+                        <SheetHeader>
+                            <SheetTitle>Schedule New Meeting</SheetTitle>
+                            <SheetDescription>Fill in the details to schedule a new meeting.</SheetDescription>
+                        </SheetHeader>
+                        <form onSubmit={addMeeting} className="space-y-4 mt-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="team">Team</Label>
+                                <Select
+                                    value={selectedCreateTeam?.toString() || ''}
+                                    onValueChange={(value) => setSelectedCreateTeam(Number(value))}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select team" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {teams.map((team) => (
+                                            <SelectItem key={team.id} value={team.id.toString()}>
+                                                {team.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="title">Title</Label>
+                                <Input id="title" name="title" required />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="description">Description</Label>
+                                <Input id="description" name="description" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Date</Label>
+                                <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen} modal={true}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            className={cn(
+                                                "w-full justify-start text-left font-normal",
+                                                !selectedDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            {selectedDate ? format(selectedDate, 'PPP') : <span>Pick a date</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                        className="w-auto p-0"
+                                        align="start"
+                                        side="bottom"
+                                        sideOffset={4}
+                                        style={calendarPopoverStyle}
+                                    >
+                                        <div className="bg-white rounded-md shadow-lg">
+                                            <Calendar
+                                                mode="single"
+                                                selected={selectedDate}
+                                                onSelect={(date) => {
+                                                    setSelectedDate(date);
+                                                    setIsDatePopoverOpen(false);
+                                                }}
+                                                initialFocus
+                                            />
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="time">Time</Label>
+                                <Input
+                                    id="time"
+                                    name="time"
+                                    type="time"
+                                    value={selectedTime}
+                                    onChange={(e) => setSelectedTime(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="duration">Duration (minutes)</Label>
+                                <Input id="duration" name="duration" type="number" min="15" step="15" defaultValue="30" required />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Participants</Label>
+                                {selectedCreateTeam ? (
+                                    <UserCombobox
+                                        teamId={selectedCreateTeam}
+                                        selectedUsers={selectedParticipants}
+                                        onSelectionChange={setSelectedParticipants}
+                                        placeholder="Select participants"
+                                    />
+                                ) : (
+                                    <div className="text-sm text-muted-foreground">
+                                        Please select a team first
+                                    </div>
+                                )}
+                            </div>
+                            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700" disabled={!selectedCreateTeam || !selectedDate}>
+                                Schedule Meeting
+                            </Button>
+                        </form>
+                    </SheetContent>
+                </Sheet>
+
+                <div className="space-y-6">
+                    {/* Currently Happening */}
+                    {groupedMeetings.current.length > 0 && (
+                        <div className="mb-8">
+                            <h3 className="text-lg font-semibold mb-4 text-red-600 flex items-center">
+                                <span className="w-2 h-2 bg-red-600 rounded-full mr-2 animate-pulse" />
+                                Happening Now
+                            </h3>
+                            <div className="space-y-3">
+                                {groupedMeetings.current.map(meeting => (
+                                    <MeetingCard key={meeting.id} meeting={meeting} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Timeline Sections */}
+                    <TimelineSection title="Today" meetings={groupedMeetings.today} />
+                    <TimelineSection title="Tomorrow" meetings={groupedMeetings.tomorrow} />
+                    <TimelineSection title="This Week" meetings={groupedMeetings.thisWeek} />
+                    <TimelineSection title="Later" meetings={groupedMeetings.upcoming} />
+
+                    {/* Empty State */}
+                    {groupedMeetings.current.length === 0 &&
+                        groupedMeetings.today.length === 0 &&
+                        groupedMeetings.tomorrow.length === 0 &&
+                        groupedMeetings.thisWeek.length === 0 &&
+                        groupedMeetings.upcoming.length === 0 && (
+                            <EmptyState
+                                title="No upcoming meetings"
+                                description="Schedule a meeting to collaborate with your team"
+                                action={
+                                    <Button onClick={handleCreateModalOpen} disabled={selectedDisplayTeam === "all"}>
+                                        <Plus className="mr-2 h-4 w-4" /> Schedule Meeting
+                                    </Button>
+                                }
+                            />
+                        )}
+                </div>
             </div>
+
+            {selectedMeeting && (
+                <MeetingParticipantsModal
+                    open={isParticipantsModalOpen}
+                    onOpenChange={setIsParticipantsModalOpen}
+                    teamId={Number(selectedDisplayTeam)}
+                    meetingId={selectedMeeting.id}
+                    currentParticipants={selectedMeeting.participants}
+                    onParticipantsUpdate={async () => {
+                        if (selectedDisplayTeam) {
+                            const updatedMeetings = await meetingApi.listMeetings(Number(selectedDisplayTeam));
+                            onMeetingUpdate(updatedMeetings);
+                        }
+                    }}
+                />
+            )}
+
+            <MeetingDetail
+                isOpen={!!selectedMeetingForDetail}
+                onClose={() => setSelectedMeetingForDetail(null)}
+                meeting={selectedMeetingForDetail || undefined}
+                teamId={selectedMeetingForDetail?.team_id || 0}
+                onMeetingUpdate={async () => {
+                    // Refresh meetings for the specific team or all teams
+                    if (selectedDisplayTeam === "all") {
+                        // If viewing all teams, refresh all meetings
+                        const allMeetings = await Promise.all(
+                            teams.map(team => meetingApi.listMeetings(team.id))
+                        );
+                        onMeetingUpdate(allMeetings.flat());
+                    } else {
+                        // If viewing a specific team, only refresh that team's meetings
+                        const updatedMeetings = await meetingApi.listMeetings(Number(selectedDisplayTeam));
+                        onMeetingUpdate(updatedMeetings);
+                    }
+                }}
+            />
         </div>
     );
 }

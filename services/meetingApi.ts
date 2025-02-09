@@ -170,7 +170,8 @@ export const meetingApi = {
 
         if (participantError) throw participantError;
 
-        return this.getMeeting(teamId, meeting.id);
+        // Get the complete meeting data with participants
+        return meetingApi.getMeeting(teamId, meeting.id);
     },
 
     // Search tasks

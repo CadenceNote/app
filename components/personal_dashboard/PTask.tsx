@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,37 +44,18 @@ interface Team {
 
 interface PTaskProps {
     tasks: Task[];
+    teams: Team[];
     setTasks: (tasks: Task[] | ((prev: Task[]) => Task[])) => void;
     searchTerm: string;
 }
 
-export default function PTask({ tasks, setTasks, searchTerm }: PTaskProps) {
+export default function PTask({ tasks, teams, setTasks, searchTerm }: PTaskProps) {
     const { user } = useUser();
-    const [teams, setTeams] = useState<Team[]>([]);
     const [selectedTeamId, setSelectedTeamId] = useState<string>("all");
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | undefined>();
     const [activeTab, setActiveTab] = useState("assigned");
     const { toast } = useToast();
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        const loadTeams = async () => {
-            try {
-                const userTeams = await teamApi.getUserTeams();
-                setTeams(userTeams);
-            } catch (error) {
-                toast({
-                    title: "Error",
-                    description: "Failed to load teams",
-                    variant: "destructive"
-                });
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        loadTeams();
-    }, [toast]);
 
     // Filter tasks based on user's role and selected team
     const filteredTasks = tasks.filter(task => {
@@ -92,10 +73,6 @@ export default function PTask({ tasks, setTasks, searchTerm }: PTaskProps) {
             description: "Task updated successfully"
         });
     };
-
-    if (isLoading) {
-        return <div>Loading...</div>;
-    }
 
     if (teams.length === 0) {
         return (
@@ -116,6 +93,12 @@ export default function PTask({ tasks, setTasks, searchTerm }: PTaskProps) {
             <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">My Tasks</h2>
                 <div className="flex items-center gap-4">
+                    {selectedTeamId !== "all" && (
+                        <Button onClick={() => setIsCreateModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            New Task
+                        </Button>
+                    )}
                     <Select
                         value={selectedTeamId}
                         onValueChange={setSelectedTeamId}
@@ -132,13 +115,6 @@ export default function PTask({ tasks, setTasks, searchTerm }: PTaskProps) {
                             ))}
                         </SelectContent>
                     </Select>
-
-                    {selectedTeamId !== "all" && (
-                        <Button onClick={() => setIsCreateModalOpen(true)}>
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            New Task
-                        </Button>
-                    )}
                 </div>
             </div>
 

@@ -12,10 +12,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     queries: {
                         staleTime: 5 * 60 * 1000, // 5 minutes
                         gcTime: 30 * 60 * 1000, // 30 minutes
-                        refetchOnWindowFocus: false, // Disable refetch on window focus
-                        refetchOnReconnect: false, // Disable refetch on reconnect
-                        retry: false, // Disable retries
-                        suspense: true // Enable suspense mode
+                        refetchOnWindowFocus: true,
+                        refetchOnReconnect: true,
+                        retry: 1,
+                        refetchOnMount: "always"
                     },
                 },
             })
