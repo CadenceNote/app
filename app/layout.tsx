@@ -6,7 +6,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { AvatarCacheProvider } from '@/contexts/AvatarCache';
 import { SWRConfig } from "swr";
 import { SidebarStateProvider } from "@/components/sidebar/sidebar-state-provider";
-
+import { Analytics } from "@vercel/analytics/react"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -58,6 +59,8 @@ export default function RootLayout({
           </AvatarCacheProvider>
         </ThemeProvider>
         <Toaster />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
