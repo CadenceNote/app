@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { supabase } from '@/lib/supabase';
 
 interface User {
@@ -6,55 +6,27 @@ interface User {
     email: string;
     full_name: string;
     avatar_url?: string | null;
+    user_metadata?: {
+        avatar_url?: string;
+    };
 }
 
-interface UserState {
-    user: User | null;
-    isLoading: boolean;
-    error: Error | null;
-}
-
-const CACHED_USER_KEY = 'cached_user';
+// Cache key for user data
+export const userKeys = {
+    current: () => ['current_user'],
+};
 
 export function useUser() {
-    const [state, setState] = useState<UserState>({
-        user: null,
-        isLoading: true,
-        error: null,
-    });
-
-    useEffect(() => {
-        // Sanitize cached data before using
-        const getCachedUser = () => {
-            try {
-                const cached = localStorage.getItem(CACHED_USER_KEY);
-                if (!cached) return null;
-                const parsed = JSON.parse(cached);
-                // Validate required fields
-                if (!parsed.id || !parsed.email || !parsed.full_name) {
-                    throw new Error('Invalid cached user data');
-                }
-                return parsed;
-            } catch {
-                localStorage.removeItem(CACHED_USER_KEY);
-                return null;
-            }
-        };
-
-        const cachedUser = getCachedUser();
-        if (cachedUser) {
-            setState(prev => ({ ...prev, user: cachedUser, isLoading: false }));
-        }
-
-        const loadUser = async () => {
+    // Use SWR for fetching user data
+    const { data, error, isLoading, mutate } = useSWR(
+        userKeys.current(),
+        async () => {
             try {
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
                 if (sessionError) throw sessionError;
 
                 if (!session) {
-                    setState({ user: null, isLoading: false, error: null });
-                    localStorage.removeItem(CACHED_USER_KEY);
-                    return;
+                    return null;
                 }
 
                 if (session.user) {
@@ -67,43 +39,43 @@ export function useUser() {
                     if (userError) throw userError;
 
                     if (userData) {
-                        const userObject = {
+                        return {
                             id: userData.supabase_uid,
                             email: userData.email,
                             full_name: userData.full_name,
                             avatar_url: userData.avatar_url,
+                            user_metadata: session.user.user_metadata
                         };
-
-                        setState({ user: userObject, isLoading: false, error: null });
-                        localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userObject));
                     }
                 }
+                return null;
             } catch (error) {
-                setState(prev => ({
-                    ...prev,
-                    error: error instanceof Error ? error : new Error('Unknown error'),
-                    isLoading: false
-                }));
+                console.error('Error in useUser:', error);
+                throw error;
             }
-        };
-
-        if (!cachedUser) {
-            loadUser();
+        },
+        {
+            revalidateOnFocus: true,
+            revalidateOnReconnect: true,
+            dedupingInterval: 5000,
+            shouldRetryOnError: false
         }
+    );
 
+    // Setup auth state change listener
+    useSWR(userKeys.current(), () => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
             if (event === 'SIGNED_OUT') {
-                setState({ user: null, isLoading: false, error: null });
-                localStorage.removeItem(CACHED_USER_KEY);
-            } else if (event === 'SIGNED_IN') {
-                await loadUser();
+                // Just revalidate the data when signed out
+                await mutate(userKeys.current());
             }
         });
+        return () => subscription.unsubscribe();
+    });
 
-        return () => {
-            subscription.unsubscribe();
-        };
-    }, []);
-
-    return state;
+    return {
+        user: data,
+        isLoading,
+        error: error as Error | null,
+    };
 }

@@ -1,43 +1,41 @@
-import { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { userApi } from '@/services/userApi';
-import { useAvatarCache } from '@/contexts/AvatarCache';
+
+// Cache key for user data
+export const userDataKeys = {
+    user: (userId?: string) => ['user_data', userId],
+};
 
 export function useUserData(userId: string | undefined) {
-    const [userData, setUserData] = useState<{
-        id: string;
-        email: string;
-        full_name: string;
-        avatar_url: string | null;
-    } | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const { getCachedUrl, setCachedUrl } = useAvatarCache();
-
-    useEffect(() => {
-        const loadUserData = async () => {
-            if (!userId) {
-                setIsLoading(false);
-                return;
-            }
+    const { data: userData, isLoading, error } = useSWR(
+        userId ? userDataKeys.user(userId) : null,
+        async () => {
+            if (!userId) return null;
 
             try {
                 const data = await userApi.getUserData(userId);
-                if (data?.avatar_url) {
-                    // Check avatar cache
-                    const cachedUrl = getCachedUrl(data.avatar_url);
-                    if (!cachedUrl) {
-                        setCachedUrl(data.avatar_url, data.avatar_url);
-                    }
-                }
-                setUserData(data);
+                return data ? {
+                    id: data.id,
+                    email: data.email,
+                    full_name: data.full_name || '',  // Ensure full_name is always a string
+                    avatar_url: data.avatar_url
+                } : null;
             } catch (error) {
                 console.error('Error loading user data:', error);
-            } finally {
-                setIsLoading(false);
+                throw error;
             }
-        };
+        },
+        {
+            revalidateOnFocus: true,
+            revalidateOnReconnect: true,
+            dedupingInterval: 5000,
+            shouldRetryOnError: false
+        }
+    );
 
-        loadUserData();
-    }, [userId, getCachedUrl, setCachedUrl]);
-
-    return { userData, isLoading };
+    return {
+        userData,
+        isLoading,
+        error
+    };
 } 

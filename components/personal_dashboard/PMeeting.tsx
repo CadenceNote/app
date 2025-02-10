@@ -4,9 +4,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Plus, Calendar as CalendarIcon, Clock, Users, ArrowRight, MoreVertical, Trash2, UserPlus } from "lucide-react"
 import { Label } from "../ui/label"
 import { Input } from "../ui/input"
-import { Meeting as APIMeeting, MeetingType } from "@/lib/types/meeting"
+import { Meeting, MeetingType } from "@/lib/types/meeting"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../ui/select"
-import { meetingApi } from '@/services/meetingApi'
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { Card } from "../ui/card"
 import { format, isToday, isTomorrow, isThisWeek, isAfter, parseISO } from "date-fns"
@@ -20,20 +19,9 @@ import { useRouter } from "next/navigation"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu"
 import { MeetingParticipantsModal } from "../meetings/MeetingParticipantsModal"
 import { MeetingDetail } from "../meetings/MeetingDetail"
-
-// Use the API Meeting type directly
-type Meeting = APIMeeting;
-
-interface Team {
-    id: number;
-    name: string;
-}
-
-interface PMeetingProps {
-    meetings: Meeting[];
-    teams: Team[];
-    onMeetingUpdate: (meetings: Meeting[]) => void;
-}
+import { useTeams } from "@/hooks/useTeams"
+import { useMeeting } from "@/hooks/useMeeting"
+import { Skeleton } from "../ui/skeleton"
 
 // Update the calendar popover style
 const calendarPopoverStyle: React.CSSProperties = {
@@ -41,7 +29,7 @@ const calendarPopoverStyle: React.CSSProperties = {
     position: 'relative'
 };
 
-export default function PMeeting({ meetings, teams, onMeetingUpdate }: PMeetingProps) {
+export default function PMeeting() {
     const router = useRouter();
     const [selectedDisplayTeam, setSelectedDisplayTeam] = useState<string>("all");
     const [selectedCreateTeam, setSelectedCreateTeam] = useState<number | null>(null);
@@ -55,10 +43,37 @@ export default function PMeeting({ meetings, teams, onMeetingUpdate }: PMeetingP
     const [selectedMeetingForDetail, setSelectedMeetingForDetail] = useState<Meeting | null>(null);
     const { toast } = useToast();
 
+    // Use our hooks
+    const { teams, isLoading: isLoadingTeams } = useTeams();
+    const {
+        meetings,
+        createMeeting,
+        updateMeeting,
+        deleteMeeting,
+        isLoadingMeetings
+    } = useMeeting(
+        selectedDisplayTeam === "all" ? undefined : Number(selectedDisplayTeam)
+    );
+
+    // Show loading state while teams are being fetched
+    if (isLoadingTeams) {
+        return (
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <Skeleton className="h-8 w-32" />
+                    <Skeleton className="h-10 w-40" />
+                </div>
+                <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-24 w-full" />
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
     // Filter meetings based on selected team
-    const filteredMeetings = selectedDisplayTeam === "all"
-        ? meetings
-        : meetings.filter(meeting => meeting.team_id === Number(selectedDisplayTeam));
+    const filteredMeetings = meetings || [];
 
     // Group meetings by time
     const now = new Date();
@@ -80,7 +95,7 @@ export default function PMeeting({ meetings, teams, onMeetingUpdate }: PMeetingP
     const handleCreateModalOpen = () => {
         if (selectedDisplayTeam === "all") {
             // If "All Teams" is selected, use the first team as default
-            setSelectedCreateTeam(teams[0]?.id || null);
+            setSelectedCreateTeam(teams?.[0]?.id || null);
         } else {
             setSelectedCreateTeam(Number(selectedDisplayTeam));
         }
@@ -103,7 +118,7 @@ export default function PMeeting({ meetings, teams, onMeetingUpdate }: PMeetingP
         const startTime = `${format(selectedDate, 'yyyy-MM-dd')}T${selectedTime}:00`;
 
         try {
-            const createdMeeting = await meetingApi.createMeeting(selectedCreateTeam, {
+            const createdMeeting = await createMeeting({
                 title: formData.get("title") as string,
                 description: formData.get("description") as string,
                 start_time: startTime,
@@ -112,8 +127,6 @@ export default function PMeeting({ meetings, teams, onMeetingUpdate }: PMeetingP
                 type: MeetingType.OTHER
             });
 
-            // Update meetings through the parent component
-            onMeetingUpdate([...meetings, createdMeeting]);
             handleCreateModalClose();
             toast({
                 title: "Success",
@@ -133,18 +146,8 @@ export default function PMeeting({ meetings, teams, onMeetingUpdate }: PMeetingP
     };
 
     const handleDeleteMeeting = async (meetingId: number) => {
-        const teamId = Number(selectedDisplayTeam);
-        if (!teamId) return;
-
         try {
-            await meetingApi.updateMeeting(teamId, meetingId, {
-                status: 'CANCELLED'
-            });
-
-            // Update through parent component
-            const updatedMeetings = meetings.filter(m => m.id !== meetingId);
-            onMeetingUpdate(updatedMeetings);
-
+            await deleteMeeting(meetingId);
             toast({
                 title: "Success",
                 description: "Meeting cancelled successfully"
@@ -253,7 +256,8 @@ export default function PMeeting({ meetings, teams, onMeetingUpdate }: PMeetingP
         ) : null
     );
 
-    if (teams.length === 0) {
+    // Show empty state if no teams are available
+    if (!teams?.length) {
         return (
             <EmptyState
                 title="Welcome to Meetings"

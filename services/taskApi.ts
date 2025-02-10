@@ -113,6 +113,7 @@ const normalizeStatus = (status: string): TaskStatus => {
 export const taskApi = {
     // List tasks with filters
     listTasks: async (teamId: number): Promise<Task[]> => {
+        console.log('Listing tasks for team:', teamId);
         const { data: tasks, error } = await supabase
             .from('tasks')
             .select(`
@@ -410,53 +411,86 @@ export const taskApi = {
                 updated_at: new Date().toISOString()
             };
 
-            const { error: updateError } = await supabase
-                .from('tasks')
-                .update(updateData)
-                .eq('id', taskId)
-                .eq('team_id', teamId);
+            console.log("Preparing to update with data:", updateData);
 
-            if (updateError) throw updateError;
+            // Directly proceed with the update with error handling
+            console.log("Attempting to update task...");
+            try {
+                const { data: updatedTaskData, error: updateError } = await supabase
+                    .from('tasks')
+                    .update(updateData)
+                    .eq('id', taskId)
+                    .eq('team_id', teamId)
+                    .select('*')
+                    .single();
 
-            // If assignees are provided, update task assignments
-            if (data.assignees) {
-                console.log('Updating assignees:', data.assignees);
+                console.log("Update attempt completed", { updatedTaskData, updateError });
 
-                // First, remove all existing assignees
-                const { error: deleteError } = await supabase
-                    .from('task_assignments')
-                    .delete()
-                    .eq('task_id', taskId)
-                    .eq('role', 'ASSIGNEE');
+                if (updateError) {
+                    console.error("Error updating task:", updateError);
+                    throw new Error(`Task update failed: ${updateError.message}`);
+                }
 
-                if (deleteError) throw deleteError;
+                if (!updatedTaskData) {
+                    console.error("No data returned from update");
+                    throw new Error('Update succeeded but no data returned');
+                }
 
-                // Then add new assignees if any
-                if (data.assignees.length > 0) {
-                    // Create assignments using supabase_uid directly
+                // If we get here, the update was successful
+                console.log("Task update successful:", updatedTaskData);
+
+                // Handle assignees if provided
+                if (data.assignees && data.assignees.length > 0) {
+                    console.log('Starting assignee update process');
+
+                    // Delete existing assignees
+                    console.log("Removing existing assignees...");
+                    const { error: deleteError } = await supabase
+                        .from('task_assignments')
+                        .delete()
+                        .eq('task_id', taskId)
+                        .eq('role', 'ASSIGNEE');
+
+                    if (deleteError) {
+                        console.error("Error deleting existing assignees:", deleteError);
+                        throw new Error(`Failed to delete existing assignees: ${deleteError.message}`);
+                    }
+
+                    // Add new assignees
                     const assignmentData = data.assignees.map(userId => ({
                         task_id: taskId,
-                        user_id: userId, // Use supabase_uid directly
+                        user_id: userId,
                         role: 'ASSIGNEE'
                     }));
 
-                    console.log('Assignment data:', assignmentData);
+                    console.log('Inserting new assignments:', assignmentData);
                     const { error: assignError } = await supabase
                         .from('task_assignments')
                         .insert(assignmentData);
 
                     if (assignError) {
-                        console.error('Error inserting assignments:', assignError);
-                        throw assignError;
+                        console.error("Error inserting new assignees:", assignError);
+                        throw new Error(`Failed to insert new assignees: ${assignError.message}`);
                     }
+
+                    console.log("Assignee update completed successfully");
                 }
+
+                // Fetch the final task data with all relations
+                console.log("Fetching final task data...");
+                const finalTask = await taskApi.getTask(teamId, taskId);
+                console.log("Final task data fetched successfully");
+
+
+                return finalTask;
+
+            } catch (supabaseError) {
+                console.error("Supabase operation failed:", supabaseError);
+                throw new Error(`Database operation failed: ${supabaseError.message}`);
             }
 
-            // Fetch and return the updated task
-            return taskApi.getTask(teamId, taskId);
-
         } catch (error) {
-            console.error('Error updating task:', error);
+            console.error('Error in updateTask:', error);
             throw error;
         }
     },

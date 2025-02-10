@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import useSWR, { mutate } from 'swr';
 import {
     Dialog,
     DialogContent,
@@ -23,7 +24,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO } from "date-fns";
 import { Meeting, MeetingType } from '@/lib/types/meeting';
 import { meetingApi } from '@/services/meetingApi';
-import { useToast } from '@/hooks/use-toast';
+import { toast, useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { Label } from "@/components/ui/label";
@@ -55,9 +56,20 @@ const DetailField: React.FC<DetailFieldProps> = ({ label, value, onClick, classN
 );
 
 interface MeetingSettings {
-    goals?: string[];
-    agenda?: string[];
-    resources?: string[];
+    goals: string[];
+    agenda: string[];
+    resources: string[];
+}
+
+interface MeetingData extends Meeting {
+    created_by?: {
+        id: string;
+        email: string;
+        full_name?: string;
+    };
+    created_at?: string;
+    updated_at?: string;
+    settings: MeetingSettings;
 }
 
 const defaultFormData = {
@@ -68,9 +80,9 @@ const defaultFormData = {
     duration_minutes: 30,
     participant_ids: [] as string[],
     settings: {
-        goals: [],
-        agenda: [],
-        resources: []
+        goals: [] as string[],
+        agenda: [] as string[],
+        resources: [] as string[]
     } as MeetingSettings
 };
 
@@ -91,6 +103,19 @@ const formatDateSafely = (dateString: string | undefined | null, formatString: s
     }
 };
 
+// Add type for mutation input
+interface UpdateMeetingInput {
+    teamId: number;
+    meetingId: number;
+    data: Partial<Meeting>;
+}
+
+interface UpdateParticipantsInput {
+    teamId: number;
+    meetingId: number;
+    participantIds: string[];
+}
+
 export function MeetingDetail({ isOpen, onClose, meeting, teamId, onMeetingUpdate }: MeetingDetailProps) {
     const router = useRouter();
     const [formData, setFormData] = useState(defaultFormData);
@@ -98,58 +123,179 @@ export function MeetingDetail({ isOpen, onClose, meeting, teamId, onMeetingUpdat
     const [selectedDate, setSelectedDate] = useState<Date>();
     const [selectedTime, setSelectedTime] = useState("09:00");
     const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
-    const [currentMeeting, setCurrentMeeting] = useState<Meeting | undefined>(meeting);
     const { toast } = useToast();
 
-    // Update form data and current meeting when meeting prop changes
+    // Use SWR to manage meeting data
+    const { data: currentMeeting, mutate: mutateMeeting } = useSWR(
+        isOpen && meeting && teamId ? `meetings/${teamId}/${meeting.id}` : null,
+        () => {
+            if (!meeting || !teamId) return null;
+            return meetingApi.getMeeting(teamId, meeting.id);
+        }
+    );
+
+    // Listen for window focus events to revalidate meeting data
     useEffect(() => {
-        if (meeting) {
-            setCurrentMeeting(meeting);
-            const meetingDate = parseISO(meeting.start_time);
+        const handleWindowFocus = () => {
+            if (meeting?.id && teamId) {
+                console.log("Window focused: revalidating meeting data");
+                mutate(`meetings/${teamId}/${meeting.id}`);
+            }
+        };
+
+        window.addEventListener('focus', handleWindowFocus);
+        return () => {
+            window.removeEventListener('focus', handleWindowFocus);
+        };
+    }, [teamId, meeting?.id]);
+
+    // Update meeting function
+    const updateMeeting = async ({ teamId, meetingId, data }: UpdateMeetingInput) => {
+        if (!currentMeeting) return;
+
+        try {
+            // Optimistically update the UI
+            await mutate(
+                `meetings/${teamId}/${meetingId}`,
+                { ...currentMeeting, ...data },
+                false
+            );
+
+            // Make the API call
+            await meetingApi.updateMeeting(teamId, meetingId, data);
+            const updatedMeeting = await meetingApi.getMeeting(teamId, meetingId);
+
+            // Update all related data
+            await Promise.all([
+                mutate(`meetings/${teamId}/${meetingId}`, updatedMeeting),
+                mutate(`meetings/${teamId}`),
+            ]);
+
+            if (onMeetingUpdate) {
+                onMeetingUpdate(updatedMeeting);
+            }
+
+            return updatedMeeting;
+        } catch (error) {
+            console.error('Failed to update meeting:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update meeting. Please try again.",
+                variant: "destructive"
+            });
+            // Revalidate on error to ensure we have the correct data
+            await mutate(`meetings/${teamId}/${meetingId}`);
+            throw error;
+        }
+    };
+
+    // Update participants function
+    const updateParticipants = async ({ teamId, meetingId, participantIds }: UpdateParticipantsInput) => {
+        if (!currentMeeting) return;
+
+        try {
+            // Optimistically update the UI
+            await mutate(
+                `meetings/${teamId}/${meetingId}`,
+                {
+                    ...currentMeeting,
+                    participants: participantIds.map(id => ({
+                        id,
+                        email: '',
+                        full_name: ''
+                    }))
+                },
+                false
+            );
+
+            // Make the API call
+            await meetingApi.updateParticipants(teamId, meetingId, participantIds);
+
+            // Update all related data
+            await Promise.all([
+                mutate(`meetings/${teamId}/${meetingId}`),
+                mutate(`meetings/${teamId}`)
+            ]);
+        } catch (error) {
+            console.error('Failed to update participants:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update participants. Please try again.",
+                variant: "destructive"
+            });
+            // Revalidate on error to ensure we have the correct data
+            await mutate(`meetings/${teamId}/${meetingId}`);
+            throw error;
+        }
+    };
+
+    // Reset state when the modal is opened/closed
+    useEffect(() => {
+        if (!isOpen) {
+            setIsEditing(false);
+            setFormData(defaultFormData);
+            setSelectedDate(undefined);
+            setSelectedTime("09:00");
+            setIsDatePopoverOpen(false);
+        } else if (meeting && teamId) {
+            // Force revalidate when modal opens
+            mutate(`meetings/${teamId}/${meeting.id}`);
+        }
+    }, [isOpen, meeting, teamId]);
+
+    // Update form data when meeting data changes
+    useEffect(() => {
+        if (currentMeeting && isOpen) {
+            const meetingDate = parseISO(currentMeeting.start_time);
             setFormData({
-                title: meeting.title,
-                description: meeting.description || '',
-                type: meeting.type,
-                start_time: meeting.start_time,
-                duration_minutes: meeting.duration_minutes,
-                participant_ids: meeting.participants.map(p => p.id.toString()),
+                title: currentMeeting.title,
+                description: currentMeeting.description || '',
+                type: currentMeeting.type,
+                start_time: currentMeeting.start_time,
+                duration_minutes: currentMeeting.duration_minutes,
+                participant_ids: currentMeeting.participants.map(p => p.id.toString()),
                 settings: {
-                    goals: meeting.settings?.goals || [],
-                    agenda: meeting.settings?.agenda || [],
-                    resources: meeting.settings?.resources || []
+                    goals: currentMeeting.settings?.goals || [],
+                    agenda: currentMeeting.settings?.agenda || [],
+                    resources: currentMeeting.settings?.resources || []
                 }
             });
             setSelectedDate(meetingDate);
             setSelectedTime(format(meetingDate, 'HH:mm'));
         }
-    }, [meeting]);
+    }, [currentMeeting, isOpen]);
 
     const handleSubmit = async () => {
-        if (!meeting || !selectedDate) return;
+        if (!meeting || !selectedDate || !teamId) return;
 
         try {
             const startTime = `${format(selectedDate, 'yyyy-MM-dd')}T${selectedTime}:00`;
 
-            // Update the meeting details including settings
-            await meetingApi.updateMeeting(teamId, meeting.id, {
-                title: formData.title,
-                description: formData.description,
-                type: formData.type,
-                start_time: startTime,
-                duration_minutes: formData.duration_minutes,
-                settings: formData.settings
+            // Update meeting details
+            await updateMeeting({
+                teamId,
+                meetingId: meeting.id,
+                data: {
+                    title: formData.title,
+                    description: formData.description,
+                    type: formData.type,
+                    start_time: startTime,
+                    duration_minutes: formData.duration_minutes,
+                    settings: {
+                        goals: formData.settings.goals || [],
+                        agenda: formData.settings.agenda || [],
+                        resources: formData.settings.resources || []
+                    }
+                }
             });
 
-            // Then update the participants separately
-            await meetingApi.updateParticipants(teamId, meeting.id, formData.participant_ids);
-
-            // Fetch the updated meeting with participants
-            const refreshedMeeting = await meetingApi.getMeeting(teamId, meeting.id);
-
-            // Update both the local state and parent component
-            setCurrentMeeting(refreshedMeeting);
-            if (onMeetingUpdate) {
-                onMeetingUpdate(refreshedMeeting);
+            // Update participants
+            if (formData.participant_ids.length > 0) {
+                await updateParticipants({
+                    teamId,
+                    meetingId: meeting.id,
+                    participantIds: formData.participant_ids
+                });
             }
 
             setIsEditing(false);
@@ -161,14 +307,14 @@ export function MeetingDetail({ isOpen, onClose, meeting, teamId, onMeetingUpdat
             console.error('Failed to update meeting:', error);
             toast({
                 title: "Error",
-                description: "Failed to update meeting",
+                description: "Failed to update meeting. Please try again.",
                 variant: "destructive"
             });
         }
     };
 
     const handleJoinMeeting = () => {
-        if (!meeting) return;
+        if (!meeting || !teamId) return;
         router.push(`/dashboard/${teamId}/meetings/${meeting.id}`);
     };
 
@@ -522,6 +668,7 @@ export function MeetingDetail({ isOpen, onClose, meeting, teamId, onMeetingUpdat
                             </div>
                         )}
                     </div>
+
 
                     {/* Right Column - Additional Details */}
                     <div className="w-80 p-6 overflow-y-auto bg-muted/10">

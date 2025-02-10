@@ -60,7 +60,12 @@ const calculateActiveStates = (items: NavItem[], pathname: string) =>
 export const AppSidebar = memo(function AppSidebar({ className }: AppSidebarProps) {
   const pathname = usePathname();
   const { user } = useUser();
-  const { teams } = useTeams();
+  const { teams, isLoading } = useTeams();
+
+  // Add loading state handling
+  if (isLoading) {
+    return <div>Loading teams...</div>;
+  }
 
   // Transform teams data for TeamSwitcher
   const teamSwitcherData = useMemo(() => {
@@ -85,7 +90,7 @@ export const AppSidebar = memo(function AppSidebar({ className }: AppSidebarProp
   // Calculate active states
   const navMainWithActive = {
     mySpace: calculateActiveStates(personalItems, pathname),
-    others: calculateActiveStates(getSettingsItems(currentTeamId?.toString()), pathname),
+    others: calculateActiveStates(getSettingsItems(), pathname),
   };
 
   return (
@@ -111,9 +116,9 @@ export const AppSidebar = memo(function AppSidebar({ className }: AppSidebarProp
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={{
-          name: user?.email || 'Unknown',
+          name: user?.full_name || user?.email || 'Unknown',
           email: user?.email || '',
-          avatar: user?.user_metadata?.avatar_url || defaultAvatarUrl
+          avatar: user?.avatar_url || defaultAvatarUrl
         }} />
       </SidebarFooter>
       <SidebarRail className="hover:after:bg-gradient-to-b from-indigo-500/50 to-green-500/50" />

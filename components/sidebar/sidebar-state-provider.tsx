@@ -1,30 +1,19 @@
 'use client';
 
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export function SidebarStateProvider({ children }: { children: React.ReactNode }) {
-    const [mounted, setMounted] = useState(false);
-    const [defaultOpen, setDefaultOpen] = useState(false);
-
-    useEffect(() => {
+    // Read localStorage synchronously during initial render
+    const [defaultOpen] = useState(() => {
+        if (typeof window === 'undefined') return false;
         const savedState = localStorage.getItem('sidebar:state');
-        setDefaultOpen(savedState === 'true');
-        setMounted(true);
-    }, []);
-
-    // Don't render anything until we've determined the initial state
-    if (!mounted) {
-        return (
-            <SidebarProvider defaultOpen={false}>
-                <div style={{ visibility: 'hidden' }}>{children}</div>
-            </SidebarProvider>
-        );
-    }
+        return savedState === 'true';
+    });
 
     return (
         <SidebarProvider defaultOpen={defaultOpen}>
             {children}
         </SidebarProvider>
     );
-} 
+}

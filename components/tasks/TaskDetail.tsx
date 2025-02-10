@@ -26,7 +26,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Task, TaskStatus, TaskPriority, TaskType, Label } from '@/lib/types/task';
-import { taskApi } from '@/services/taskApi';
+import { CreateTaskInput, taskApi } from '@/services/taskApi';
 import { teamApi } from '@/services/teamApi';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -36,6 +36,8 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { PriorityBadge } from "@/components/common/PriorityBadge";
 import { useUser } from '@/hooks/useUser';
 import { UserCombobox } from "@/components/common/UserCombobox";
+import useSWR, { mutate } from 'swr';
+import { taskKeys } from '@/hooks/useTask';
 
 interface TaskDetailProps {
     isOpen: boolean
@@ -193,152 +195,256 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
     const [dueDate, setDueDate] = useState<Date | undefined>();
     const [isDueDatePopoverOpen, setIsDueDatePopoverOpen] = useState(false);
     const [isStartDatePopoverOpen, setIsStartDatePopoverOpen] = useState(false);
-    const [labels, setLabels] = useState<Label[]>([]);
     const [teamMembers, setTeamMembers] = useState<{ id: string; email: string; full_name: string; avatar_url: string }[]>([]);
-    const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
     const [teamName, setTeamName] = useState('');
     const [isWatching, setIsWatching] = useState(false);
-    const [fullTaskData, setFullTaskData] = useState<Task | null>(null);
     const { user } = useUser();
     const { toast } = useToast();
 
-    // Fetch complete task data when dialog opens
-    useEffect(() => {
-        const fetchFullTaskData = async () => {
-            if (isOpen && task) {
-                try {
-                    const completeTask = await taskApi.getTask(teamId, parseInt(task.id));
-                    setFullTaskData(completeTask);
-
-                    // Update form data with complete task data
-                    setFormData({
-                        title: completeTask.title || '',
-                        description: completeTask.description || '',
-                        status: completeTask.status,
-                        priority: completeTask.priority,
-                        type: completeTask.type || TaskType.TASK,
-                        start_date: completeTask.start_date,
-                        due_date: completeTask.due_date,
-                        assignees: completeTask.assignees || [],
-                        category: completeTask.category || '',
-                    });
-
-                    setStartDate(completeTask.start_date ? new Date(completeTask.start_date) : undefined);
-                    setDueDate(completeTask.due_date ? new Date(completeTask.due_date) : undefined);
-                } catch (error) {
-                    console.error('Failed to fetch complete task data:', error);
-                    toast({
-                        title: "Error",
-                        description: "Failed to load task details. Please try again.",
-                        variant: "destructive"
-                    });
-                }
-            }
-        };
-
-        fetchFullTaskData();
-    }, [isOpen, task, teamId]);
-
-    // Use fullTaskData instead of task for rendering
-    const activeTask = fullTaskData || task;
-
-    // Load team members
-    useEffect(() => {
-        const loadData = async () => {
-            try {
-                // Load team data
-                const teamData = await teamApi.getTeam(teamId);
-                setTeamMembers(teamData.members?.map(m => ({
-                    id: m.user.id.toString(),
-                    email: m.user.email,
-                    full_name: m.user.full_name,
-                    avatar_url: m.user.avatar_url
-                })) || []);
-
-            } catch (error) {
-                console.error('Failed to load data:', error);
-                toast({
-                    title: "Error",
-                    description: "Failed to load team data. Please try again.",
-                    variant: "destructive"
-                });
-            }
-        };
-
-        if (teamId) {
-            loadData();
+    // Query for fetching complete task data
+    const { data: fullTaskData, isLoading, mutate: mutateTask } = useSWR(
+        isOpen && task?.id && teamId ? `tasks/${teamId}/${task.id}` : null,
+        () => {
+            if (!task?.id || !teamId) return null;
+            return taskApi.getTask(teamId, parseInt(task.id.toString()));
         }
-    }, [teamId]);
+    );
 
-    // Load team name and check if user is watching
-    useEffect(() => {
-        const loadTeamDetails = async () => {
-            if (activeTask) {
-                try {
-                    const team = await teamApi.getTeam(teamId);
-                    setTeamName(team.name);
-                    setIsWatching(activeTask.watchers.some(w => w.id === user?.id));
-                } catch (error) {
-                    console.error('Failed to load team details:', error);
-                }
-            }
-        };
-        loadTeamDetails();
-    }, [activeTask, teamId, user?.id]);
-
-    const handleDateSelect = (field: 'start_date' | 'due_date', date: Date | undefined) => {
-        if (!date) return;
-
-        if (field === 'start_date') {
-            setStartDate(date);
-            setFormData(prev => ({
-                ...prev,
-                start_date: date.toISOString().split('T')[0]
-            }));
-        } else {
-            setDueDate(date);
-            setFormData(prev => ({
-                ...prev,
-                due_date: date.toISOString().split('T')[0]
-            }));
+    // Update task function
+    const updateTask = async (data: Partial<CreateTaskInput>) => {
+        if (!task?.id || !teamId || !fullTaskData) {
+            throw new Error('Missing required task or team ID');
         }
-    };
-
-    const handleAddComment = async () => {
-        if (!activeTask || !newComment.trim()) return;
+        const taskId = parseInt(task.id.toString());
+        if (isNaN(taskId)) {
+            throw new Error('Invalid task ID');
+        }
 
         try {
-            await taskApi.addComment(teamId, parseInt(activeTask.id), newComment, replyToComment?.id);
-            setNewComment('');
-            setReplyToComment(null);
+            // Optimistically update both the detail view and the list view
+            const optimisticData = { ...fullTaskData, ...data };
 
-            // Fetch updated task data
-            const updatedTask = await taskApi.getTask(teamId, parseInt(activeTask.id));
-            setFullTaskData(updatedTask);
+            // Update the detail view cache
+            await mutate(
+                taskKeys.taskDetail(teamId, task.id.toString()),
+                optimisticData,
+                false
+            );
+
+            // Update the list view cache
+            await mutate(
+                taskKeys.teamTasks(teamId),
+                (currentTasks: Task[] | undefined) => {
+                    if (!currentTasks) return currentTasks;
+                    return currentTasks.map(t =>
+                        t.id === task.id ? { ...t, ...data } : t
+                    );
+                },
+                false
+            );
+
+            // Also update the all teams view if we're in that mode
+            await mutate(
+                taskKeys.allTeams(),
+                (currentTasks: Task[] | undefined) => {
+                    if (!currentTasks) return currentTasks;
+                    return currentTasks.map(t =>
+                        t.id === task.id ? { ...t, ...data } : t
+                    );
+                },
+                false
+            );
+
+            // Make the API call
+            const updatedTask = await taskApi.updateTask(teamId, taskId, data);
+
+            // Update all caches with the server response
+            await Promise.all([
+                mutate(taskKeys.taskDetail(teamId, task.id.toString()), updatedTask),
+                mutate(taskKeys.teamTasks(teamId)),
+                mutate(taskKeys.allTeams())
+            ]);
+
+            // Call the onTaskUpdate callback if provided
             if (onTaskUpdate) {
                 onTaskUpdate(updatedTask);
             }
 
-            toast({
-                title: "Comment added",
-                description: "Your comment has been added successfully."
-            });
-        } catch (err) {
-            console.error('Failed to add comment:', err);
+            return updatedTask;
+        } catch (error) {
+            // Revalidate on error to ensure we have the correct data
+            await Promise.all([
+                mutate(taskKeys.taskDetail(teamId, task.id.toString())),
+                mutate(taskKeys.teamTasks(teamId)),
+                mutate(taskKeys.allTeams())
+            ]);
+            throw error;
+        }
+    };
+
+    // Add comment function
+    const addComment = async (content: string, parentId?: number) => {
+        if (!task?.id || !teamId) {
+            throw new Error('Missing required task or team ID');
+        }
+
+        try {
+            const newComment = await taskApi.addComment(teamId, parseInt(task.id.toString()), content, parentId);
+
+            // Revalidate the task data to include the new comment
+            await mutate(`tasks/${teamId}/${task.id}`);
+
+            return newComment;
+        } catch (error) {
             toast({
                 title: "Error",
-                description: "Failed to add comment. Please try again.",
+                description: "Failed to add comment",
+                variant: "destructive"
+            });
+            throw error;
+        }
+    };
+
+    // Delete comment function
+    const deleteComment = async (commentId: number) => {
+        if (!task?.id || !teamId) {
+            throw new Error('Missing required task or team ID');
+        }
+
+        try {
+            await taskApi.deleteComment(teamId, parseInt(task.id.toString()), commentId);
+            // Revalidate the task data to remove the deleted comment
+            await mutate(`tasks/${teamId}/${task.id}`);
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to delete comment",
+                variant: "destructive"
+            });
+            throw error;
+        }
+    };
+
+    // Toggle watch function
+    const toggleWatch = async () => {
+        if (!task?.id || !teamId) {
+            throw new Error('Missing required task or team ID');
+        }
+
+        try {
+            const updatedTask = await taskApi.toggleWatch(teamId, parseInt(task.id.toString()));
+            // Update the cache with the new watch status
+            await mutate(`tasks/${teamId}/${task.id}`, updatedTask);
+            setIsWatching(updatedTask.is_watching || false);
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to update watch status",
+                variant: "destructive"
+            });
+            throw error;
+        }
+    };
+
+    // Effect to refetch data when modal opens
+    useEffect(() => {
+        if (isOpen && task?.id && teamId) {
+            mutateTask();
+        }
+    }, [isOpen, task?.id, teamId, mutateTask]);
+
+    // Effect to update form data when task data changes
+    useEffect(() => {
+        if (fullTaskData) {
+            setFormData({
+                title: fullTaskData.title || '',
+                description: fullTaskData.description || '',
+                status: fullTaskData.status,
+                priority: fullTaskData.priority,
+                type: fullTaskData.type || TaskType.TASK,
+                start_date: fullTaskData.start_date,
+                due_date: fullTaskData.due_date,
+                assignees: fullTaskData.assignees || [],
+                category: fullTaskData.category || '',
+            });
+
+            setStartDate(fullTaskData.start_date ? new Date(fullTaskData.start_date) : undefined);
+            setDueDate(fullTaskData.due_date ? new Date(fullTaskData.due_date) : undefined);
+            setIsWatching(fullTaskData.is_watching || false);
+        }
+    }, [fullTaskData]);
+
+    // Handle form submission with loading state
+    const handleSubmit = () => {
+        if (isLoading) {
+            console.log("Already submitting, returning");
+            return;
+        }
+
+        if (!task?.id) {
+            toast({
+                title: "Error",
+                description: "Cannot update task: No task ID available",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        const submitData = {
+            ...formData,
+            start_date: startDate?.toISOString(),
+            due_date: dueDate?.toISOString(),
+            assignees: formData.assignees.map(a => a.id.toString()),
+        };
+        console.log("submitData", submitData);
+
+        try {
+            updateTask(submitData);
+            console.log("SUBMITTED TO MUTATION");
+        } catch (error) {
+            console.error("Error submitting mutation:", error);
+            toast({
+                title: "Error",
+                description: "Failed to start update. Please try again.",
                 variant: "destructive"
             });
         }
     };
 
-    const handleDeleteComment = async (commentId: number) => {
-        if (!activeTask) return;
+    // Show loading state
+    if (isLoading) {
+        return (
+            <Dialog open={isOpen} onOpenChange={onClose}>
+                <DialogTitle>
+                    Loading Task
+                </DialogTitle>
+                <DialogDescription>
+                    Please wait while we load the task details
+                </DialogDescription>
+                <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden">
+                    <div className="flex-1 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                            <p className="mt-2 text-sm text-gray-600">Loading task details...</p>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        );
+    }
 
-        // Check if the comment has replies
-        const hasChildComments = hasReplies(commentId, activeTask.comments);
+    // Handle comment addition with loading state
+    const handleAddComment = () => {
+        if (isLoading || !newComment.trim()) return;
+
+        addComment(newComment, replyToComment?.id);
+    };
+
+    // Handle comment deletion with loading state
+    const handleDeleteComment = async (commentId: number) => {
+        if (isLoading || !fullTaskData) return;
+
+        const hasChildComments = hasReplies(commentId, fullTaskData.comments || []);
 
         if (hasChildComments) {
             const confirmed = window.confirm(
@@ -347,104 +453,24 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
             if (!confirmed) return;
         }
 
-        try {
-            await taskApi.deleteComment(teamId, parseInt(activeTask.id), commentId);
-
-            // Fetch updated task data
-            const updatedTask = await taskApi.getTask(teamId, parseInt(activeTask.id));
-            setFullTaskData(updatedTask);
-            if (onTaskUpdate) {
-                onTaskUpdate(updatedTask);
-            }
-
-            toast({
-                title: "Comment deleted",
-                description: hasChildComments
-                    ? "Comment and all its replies have been deleted successfully."
-                    : "Comment has been deleted successfully."
-            });
-        } catch (err) {
-            console.error('Failed to delete comment:', err);
-            toast({
-                title: "Error",
-                description: "Failed to delete comment. Please try again.",
-                variant: "destructive"
-            });
-        }
+        deleteComment(commentId);
     };
 
-    const handleSubmit = async () => {
-        try {
-            const submitData = {
-                ...formData,
-                start_date: startDate?.toISOString(),
-                due_date: dueDate?.toISOString(),
-                assignees: formData.assignees.map(a => a.id.toString()),
-            };
-
-
-            if (!activeTask?.id || !onTaskUpdate) {
-                throw new Error('No task ID or update handler provided');
-            }
-
-            const updatedTask = await taskApi.updateTask(teamId, activeTask.id, submitData);
-            setFullTaskData(updatedTask);
-            if (onTaskUpdate) {
-                onTaskUpdate(updatedTask);
-            }
-
-            toast({
-                title: "Success",
-                description: "Task updated successfully"
-            });
-        } catch (error) {
-            console.error('Failed to save task:', error);
-            toast({
-                title: "Error",
-                description: "Failed to save changes. Please try again.",
-                variant: "destructive"
-            });
-        }
-    };
-
-    const toggleWatch = async () => {
-        if (!activeTask || !user) return;
-
-        try {
-            const updatedTask = isWatching
-                ? await taskApi.removeWatcher(teamId, activeTask.id, user.id)
-                : await taskApi.addWatcher(teamId, activeTask.id, user.id);
-
-            setIsWatching(!isWatching);
-            if (onTaskUpdate) {
-                onTaskUpdate(updatedTask);
-            }
-
-            toast({
-                title: isWatching ? "Unwatched" : "Watching",
-                description: isWatching
-                    ? "You will no longer receive updates for this task"
-                    : "You will receive updates for this task"
-            });
-        } catch (error) {
-            console.error('Failed to update watch status:', error);
-            toast({
-                title: "Error",
-                description: "Failed to update watch status",
-                variant: "destructive"
-            });
-        }
+    // Handle watch toggle with loading state
+    const toggleWatchWithLoading = () => {
+        if (isLoading) return;
+        toggleWatch();
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogTitle>
+                {fullTaskData?.title || 'Task Details'}
+            </DialogTitle>
+            <DialogDescription>
+                Task details and configuration
+            </DialogDescription>
             <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden">
-                <DialogTitle className="sr-only">
-                    {activeTask?.title || 'Task Details'}
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                    View and edit task details
-                </DialogDescription>
                 <div className="flex-1 flex overflow-hidden">
                     {/* Left Column - Main Content */}
                     <div className="flex-1 p-6 overflow-y-auto border-r">
@@ -452,20 +478,20 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-4">
                                 <div className="text-sm text-gray-500">
-                                    {teamName} • T-{activeTask?.team_ref_number}
+                                    {teamName} • T-{fullTaskData?.team_ref_number}
                                 </div>
                                 <Button
                                     variant={isWatching ? "secondary" : "outline"}
                                     size="sm"
-                                    onClick={toggleWatch}
+                                    onClick={toggleWatchWithLoading}
                                 >
                                     <Eye className="mr-2 h-4 w-4" />
                                     {isWatching ? "Watching" : "Watch"}
                                 </Button>
                             </div>
-                            {activeTask && (
+                            {fullTaskData && (
                                 <div className="text-xs text-muted-foreground">
-                                    Created {new Date(activeTask.created_at).toLocaleDateString()} by {activeTask.created_by?.full_name || activeTask.created_by?.email}
+                                    Created {new Date(fullTaskData.created_at).toLocaleDateString()} by {fullTaskData.created_by?.full_name || fullTaskData.created_by?.email}
                                 </div>
                             )}
                         </div>
@@ -483,31 +509,31 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                         />
 
                         {/* Related Items Section */}
-                        {(activeTask?.source_meeting_id || activeTask?.source_note_id || activeTask?.parent_id) && (
+                        {(fullTaskData?.source_meeting_id || fullTaskData?.source_note_id || fullTaskData?.parent_id) && (
                             <div className="mb-6">
                                 <h3 className="text-sm font-medium mb-2">Related Items</h3>
                                 <div className="space-y-2">
-                                    {activeTask.source_meeting_id && (
+                                    {fullTaskData.source_meeting_id && (
                                         <div className="flex items-center gap-2 text-sm">
                                             <span className="text-muted-foreground">Source Meeting:</span>
                                             <Button variant="link" className="h-auto p-0">
-                                                Meeting #{activeTask.source_meeting_id}
+                                                Meeting #{fullTaskData.source_meeting_id}
                                             </Button>
                                         </div>
                                     )}
-                                    {activeTask.source_note_id && (
+                                    {fullTaskData.source_note_id && (
                                         <div className="flex items-center gap-2 text-sm">
                                             <span className="text-muted-foreground">Source Note:</span>
                                             <Button variant="link" className="h-auto p-0">
-                                                Note #{activeTask.source_note_id}
+                                                Note #{fullTaskData.source_note_id}
                                             </Button>
                                         </div>
                                     )}
-                                    {activeTask.parent_id && (
+                                    {fullTaskData.parent_id && (
                                         <div className="flex items-center gap-2 text-sm">
                                             <span className="text-muted-foreground">Parent Task:</span>
                                             <Button variant="link" className="h-auto p-0">
-                                                Task #{activeTask.parent_id}
+                                                Task #{fullTaskData.parent_id}
                                             </Button>
                                         </div>
                                     )}
@@ -516,11 +542,10 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                         )}
 
                         {/* Activity Section */}
-                        <div className="space-y-6">
-                            {activeTask && <h2 className="text-lg font-semibold">Activity</h2>}
+                        {/* <div className="space-y-6">
+                            {fullTaskData && <h2 className="text-lg font-semibold">Activity</h2>}
 
-                            {/* Comments Section */}
-                            {activeTask && activeTask.comments && (
+                            {fullTaskData && fullTaskData.comments && (
                                 <div className="space-y-4 mt-6">
                                     <h3 className="text-sm font-medium">Comments</h3>
                                     <div className="flex gap-2">
@@ -545,7 +570,7 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                         </div>
                                     </div>
                                     <div className="space-y-4">
-                                        {organizeCommentsIntoTree(activeTask.comments).map((commentNode) => (
+                                        {organizeCommentsIntoTree(fullTaskData.comments).map((commentNode) => (
                                             <CommentThread
                                                 key={commentNode.comment.id}
                                                 commentNode={commentNode}
@@ -558,12 +583,23 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                     </div>
                                 </div>
                             )}
-                        </div>
+                        </div> */}
 
                         {/* Save Button */}
                         <div className="mt-6">
-                            <Button onClick={handleSubmit} className="w-full">
-                                {activeTask ? 'Update Task' : 'Create Task'}
+                            <Button
+                                onClick={handleSubmit}
+                                className="w-full"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Saving...
+                                    </>
+                                ) : (
+                                    fullTaskData ? 'Update Task' : 'Create Task'
+                                )}
                             </Button>
                         </div>
                     </div>
@@ -697,7 +733,11 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                                 mode="single"
                                                 selected={dueDate}
                                                 onSelect={(date) => {
-                                                    handleDateSelect('due_date', date);
+                                                    setDueDate(date);
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        due_date: date?.toISOString().split('T')[0]
+                                                    }));
                                                     setIsDueDatePopoverOpen(false);
                                                 }}
                                                 initialFocus
@@ -737,7 +777,11 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                                 mode="single"
                                                 selected={startDate}
                                                 onSelect={(date) => {
-                                                    handleDateSelect('start_date', date);
+                                                    setStartDate(date);
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        start_date: date?.toISOString().split('T')[0]
+                                                    }));
                                                     setIsStartDatePopoverOpen(false);
                                                 }}
                                                 initialFocus

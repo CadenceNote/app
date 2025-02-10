@@ -3,9 +3,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider"
-import { DashboardProvider } from "@/contexts/DashboardContext";
-import { Providers } from "./providers";
 import { AvatarCacheProvider } from '@/contexts/AvatarCache';
+import { SWRConfig } from "swr";
+import { SidebarStateProvider } from "@/components/sidebar/sidebar-state-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,13 +32,31 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans `}
       >
-        <Providers>
-          <ThemeProvider>
-            <AvatarCacheProvider>
-              {children}
-            </AvatarCacheProvider>
-          </ThemeProvider>
-        </Providers>
+        <ThemeProvider>
+          <AvatarCacheProvider>
+            <SWRConfig
+              value={{
+                revalidateOnFocus: false,
+                revalidateOnReconnect: false,
+                focusThrottleInterval: 30000,
+                dedupingInterval: 30000,
+                shouldRetryOnError: false,
+                errorRetryCount: 2,
+                refreshInterval: 0,
+                refreshWhenHidden: false,
+                refreshWhenOffline: false,
+                suspense: false,
+                revalidateIfStale: false,
+                revalidateOnMount: true,
+                keepPreviousData: true,
+              }}
+            >
+              <SidebarStateProvider>
+                {children}
+              </SidebarStateProvider>
+            </SWRConfig>
+          </AvatarCacheProvider>
+        </ThemeProvider>
         <Toaster />
       </body>
     </html>

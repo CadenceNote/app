@@ -23,6 +23,8 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { PriorityBadge } from "@/components/common/PriorityBadge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUser } from "@/hooks/useUser";
+import { useTask } from "@/hooks/useTask";
+import { useTeams } from "@/hooks/useTeams";
 import { TaskList } from "./TaskList";
 import { PlusCircle, Eye } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -35,7 +37,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { teamApi } from "@/services/teamApi";
+import { mutate } from 'swr';
 
 interface Team {
     id: number;
@@ -43,38 +45,49 @@ interface Team {
 }
 
 interface PTaskProps {
-    tasks: Task[];
-    teams: Team[];
-    setTasks: (tasks: Task[] | ((prev: Task[]) => Task[])) => void;
     searchTerm: string;
 }
 
-export default function PTask({ tasks, teams, setTasks, searchTerm }: PTaskProps) {
+export default function PTask({ searchTerm }: PTaskProps) {
     const { user } = useUser();
+    const { teams } = useTeams();
     const [selectedTeamId, setSelectedTeamId] = useState<string>("all");
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | undefined>();
     const [activeTab, setActiveTab] = useState("assigned");
     const { toast } = useToast();
 
-    // Filter tasks based on user's role and selected team
-    const filteredTasks = tasks.filter(task => {
-        const teamMatch = selectedTeamId === "all" || task.team_id.toString() === selectedTeamId;
+    // Use task hook with selected team
+    const { tasks, createTask, updateTask } = useTask(
+        selectedTeamId === "all" ? undefined : Number(selectedTeamId)
+    );
+
+    // Filter tasks based on user's role
+    const filteredTasks = tasks?.filter(task => {
         const roleMatch = activeTab === "assigned"
             ? task.assignees.some(assignee => assignee.id === user?.id)
             : task.watchers.some(watcher => watcher.id === user?.id);
-        return teamMatch && roleMatch;
-    });
+        return roleMatch;
+    }) || [];
 
     const handleTaskUpdate = async (updatedTask: Task) => {
-        setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-        toast({
-            title: "Success",
-            description: "Task updated successfully"
-        });
+        try {
+            await updateTask(updatedTask.id, updatedTask);
+            toast({
+                title: "Success",
+                description: "Task updated successfully"
+            });
+        } catch (error) {
+            console.error('Error updating task:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update task",
+                variant: "destructive"
+            });
+        }
     };
 
-    if (teams.length === 0) {
+    if (!teams?.length) {
         return (
             <EmptyState
                 title="Welcome to Tasks"
@@ -108,7 +121,7 @@ export default function PTask({ tasks, teams, setTasks, searchTerm }: PTaskProps
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Teams</SelectItem>
-                            {teams.map((team) => (
+                            {teams?.map((team) => (
                                 <SelectItem key={team.id} value={team.id.toString()}>
                                     {team.name}
                                 </SelectItem>
@@ -121,11 +134,11 @@ export default function PTask({ tasks, teams, setTasks, searchTerm }: PTaskProps
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="assigned">
-                        Assigned to me ({tasks.filter(t => t.assignees.some(a => a.id === user?.id)).length})
+                        Assigned to me ({tasks?.filter(t => t.assignees.some(a => a.id === user?.id)).length})
                     </TabsTrigger>
                     <TabsTrigger value="watching">
                         <Eye className="mr-2 h-4 w-4" />
-                        Watching ({tasks.filter(t => t.watchers.some(w => w.id === user?.id)).length})
+                        Watching ({tasks?.filter(t => t.watchers.some(w => w.id === user?.id)).length})
                     </TabsTrigger>
                 </TabsList>
 
@@ -166,8 +179,8 @@ export default function PTask({ tasks, teams, setTasks, searchTerm }: PTaskProps
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 teamId={Number(selectedTeamId)}
-                onTaskCreate={(newTask) => {
-                    setTasks(prev => [...prev, newTask]);
+                onTaskCreate={async (newTask) => {
+                    await createTask(newTask);
                     setIsCreateModalOpen(false);
                 }}
             />

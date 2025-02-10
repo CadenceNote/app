@@ -7,7 +7,12 @@ import { Calendar } from "../ui/calendar"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { Task } from "@/lib/types/task"
 import { Meeting } from "@/lib/types/meeting"
-import { format, parseISO, startOfDay } from "date-fns"
+import { format, parseISO, startOfDay, differenceInDays, differenceInHours, differenceInMinutes } from "date-fns"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { TaskDetail } from "@/components/tasks/TaskDetail"
+import { MeetingDetail } from "@/components/meetings/MeetingDetail"
+import { useState } from "react"
+import { useTeams } from "@/hooks/useTeams"
 
 interface PEventsProps {
     meetings: Meeting[];
@@ -16,8 +21,260 @@ interface PEventsProps {
     setDate: (date: Date | undefined) => void;
 }
 
+// Helper function to format remaining time
+function formatRemainingTime(date: Date): string {
+    const now = new Date();
+    const days = differenceInDays(date, now);
+    const hours = differenceInHours(date, now);
+    const minutes = differenceInMinutes(date, now);
+
+    if (minutes < 0) {
+        return 'Finished';
+    }
+
+    if (days > 0) {
+        return `${days} day${days > 1 ? 's' : ''} remaining`;
+    }
+
+    if (hours > 0) {
+        const remainingMinutes = minutes % 60;
+        return `${hours}h ${remainingMinutes}m remaining`;
+    }
+
+    if (minutes > 0) {
+        return `${minutes} minute${minutes > 1 ? 's' : ''} remaining`;
+    }
+
+    return 'Now';
+}
+
+// Helper function to format task due status
+function formatTaskDueStatus(dueDate: string | undefined, status: string): string {
+    if (!dueDate || status === 'DONE') return '';
+
+    const now = new Date();
+    const due = parseISO(dueDate);
+    const days = differenceInDays(due, now);
+
+    if (days < 0) {
+        return `Past due by ${Math.abs(days)} day${Math.abs(days) > 1 ? 's' : ''}`;
+    }
+
+    if (days === 0) {
+        return 'Due today';
+    }
+
+    return `${days} day${days > 1 ? 's' : ''} remaining`;
+}
+
+// Helper function to get display name for avatar
+function getDisplayName(participant: any): string {
+    if (typeof participant.name === 'string') return participant.name;
+    if (typeof participant.full_name === 'string') return participant.full_name;
+    if (typeof participant.email === 'string') return participant.email;
+    return 'User';
+}
+
+// Helper function to get user ID
+function getUserId(participant: any): string {
+    if (participant.id) return participant.id.toString();
+    return 'unknown';
+}
+
+// Helper function to get team name
+function getTeamName(teams: any[], teamId: number): string {
+    const team = teams.find(t => t.id === teamId);
+    return team ? team.name : `Team ${teamId}`;
+}
+
+// Meeting Card Component
+function MeetingCard({
+    title,
+    time,
+    description,
+    teamId,
+    eventType,
+    duration,
+    participants,
+    onClick
+}: {
+    title: string;
+    time: string;
+    description?: string;
+    teamId: number;
+    eventType?: string;
+    duration?: number;
+    participants?: any[];
+    onClick: () => void;
+}) {
+    const { teams } = useTeams();
+    const isPast = new Date(time) < new Date();
+
+    if (isPast) return null;
+
+    return (
+        <div
+            onClick={onClick}
+            className="group relative overflow-hidden rounded-lg border border-gray-200 transition-all duration-300 hover:border-gray-300 hover:shadow-lg cursor-pointer bg-white min-h-[120px]"
+        >
+            <div className="p-4 h-[120px] transition-all duration-300 group-hover:-translate-y-full">
+                <div className="flex items-center space-x-4">
+                    <div className="rounded-full px-3 py-1 text-sm font-medium min-w-[100px] text-center text-indigo-700">
+                        Meeting
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{title}</p>
+                        <div className="flex items-center gap-2 text-sm mt-1">
+                            <span className="text-indigo-600 font-medium">
+                                {format(parseISO(time), 'MMM d, h:mm a')}
+                            </span>
+                            <span className="text-gray-500">• {eventType}</span>
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                            {teams && getTeamName(teams, teamId)}
+                        </div>
+                    </div>
+                    {participants && (
+                        <div className="flex -space-x-2">
+                            {participants.slice(0, 3).map((participant, i) => (
+                                <UserAvatar
+                                    key={i}
+                                    userId={getUserId(participant)}
+                                    name={getDisplayName(participant)}
+                                    className="h-8 w-8 border-2 border-background"
+                                />
+                            ))}
+                            {participants.length > 3 && (
+                                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-gray-100 text-sm font-medium text-gray-600 border-2 border-background">
+                                    +{participants.length - 3}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="absolute inset-0 h-[120px] flex flex-col p-4 bg-gradient-to-br from-white to-gray-50 transition-all duration-300 translate-y-full group-hover:translate-y-0">
+                <div className="grid grid-cols-2 gap-4 h-full">
+                    <div className="space-y-2">
+                        <p className="text-sm text-gray-600 line-clamp-3">Description: {description}</p>
+                        <p className="font-medium text-indigo-600 text-sm">
+                            {formatRemainingTime(parseISO(time))}
+                        </p>
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-sm text-gray-600">Duration: {duration} minutes</p>
+                        <p className="text-sm text-gray-600">Type: {eventType}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Task Card Component
+function TaskCard({
+    title,
+    description,
+    teamId,
+    status,
+    priority,
+    dueDate,
+    eventType,
+    assignees,
+    onClick
+}: {
+    title: string;
+    description?: string;
+    teamId: number;
+    status?: string;
+    priority?: string;
+    dueDate?: string;
+    eventType?: string;
+    assignees?: any[];
+    onClick: () => void;
+}) {
+    const { teams } = useTeams();
+
+    if (status === 'DONE') return null;
+
+    return (
+        <div
+            onClick={onClick}
+            className="group relative overflow-hidden rounded-lg border border-gray-200 transition-all duration-300 hover:border-gray-300 hover:shadow-lg cursor-pointer bg-white min-h-[120px]"
+        >
+            <div className="p-4 h-[120px] transition-all duration-300 group-hover:-translate-y-full">
+                <div className="flex items-center space-x-4">
+                    <div className="rounded-full px-3 py-1 text-sm font-medium min-w-[100px] text-center text-purple-700">
+                        Task
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div>
+                            <span className={cn(
+                                "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
+                                eventType === "FEATURE" && "bg-purple-50 text-purple-700",
+                                eventType === "BUG" && "bg-red-50 text-red-700",
+                                eventType === "TASK" && "bg-blue-50 text-blue-700"
+                            )}>
+                                {eventType}
+                            </span>
+                            <span className="font-medium truncate ml-2">{title}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm mt-1">
+                            <span className="text-purple-600 font-medium">
+                                {dueDate && "Due: " + format(parseISO(dueDate), 'MMM d')}
+                            </span>
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                            {teams && getTeamName(teams, teamId)}
+                        </div>
+                    </div>
+                    {assignees && assignees.length > 0 && (
+                        <div className="flex -space-x-2">
+                            {assignees.slice(0, 3).map((assignee, i) => (
+                                <UserAvatar
+                                    key={i}
+                                    userId={getUserId(assignee)}
+                                    name={getDisplayName(assignee)}
+                                    className="h-8 w-8 border-2 border-background"
+                                />
+                            ))}
+                            {assignees.length > 3 && (
+                                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-gray-100 text-sm font-medium text-gray-600 border-2 border-background">
+                                    +{assignees.length - 3}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="absolute inset-0 h-[120px] flex flex-col p-4 bg-gradient-to-br from-white to-gray-50 transition-all duration-300 translate-y-full group-hover:translate-y-0">
+                <div className="grid grid-cols-2 gap-4 h-full">
+                    <div className="space-y-2">
+                        <p className="text-sm text-gray-600 line-clamp-3">Description: {description}</p>
+                        <p className="font-medium text-purple-600 text-sm">
+                            {dueDate && formatTaskDueStatus(dueDate, status || '')}
+                        </p>
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-sm text-gray-600">Status: {status}</p>
+                        <p className="text-sm text-gray-600">Priority: {priority}</p>
+                        {assignees && assignees.length > 0 && (
+                            <p className="text-sm text-gray-600 truncate">
+                                Assignees: {assignees.map(a => getDisplayName(a)).join(', ')}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function PEvents({ meetings, tasks, date, setDate }: PEventsProps) {
     const today = startOfDay(new Date());
+    const [selectedTask, setSelectedTask] = useState<Task | undefined>();
+    const [selectedMeeting, setSelectedMeeting] = useState<Meeting | undefined>();
+    const { teams } = useTeams();
 
     // Filter today's meetings and tasks
     const todayMeetings = meetings.filter(meeting => {
@@ -64,57 +321,31 @@ export default function PEvents({ meetings, tasks, date, setDate }: PEventsProps
                                 <h3 className="text-lg font-semibold mb-4">Today</h3>
                                 <div className="space-y-4">
                                     {todayMeetings.map(meeting => (
-                                        <div key={meeting.id} className="flex items-center space-x-4 p-3 rounded-lg border hover:bg-accent">
-                                            <div className="bg-grey-100 rounded-full p-2 min-w-[80px] text-center">
-                                                <div className="text-gray-500">
-                                                    Meeting
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium truncate">{meeting.title}</p>
-                                                <p className="text-sm text-muted-foreground">
-                                                    {format(parseISO(meeting.start_time), 'h:mm a')}
-                                                </p>
-                                            </div>
-                                            <div className="flex -space-x-2">
-                                                {meeting.participants.slice(0, 3).map((participant, i) => (
-                                                    <UserAvatar
-                                                        key={i}
-                                                        userId={participant.id}
-                                                        name={participant.name || participant.full_name}
-                                                        className="h-8 w-8 border-2 border-background"
-                                                    />
-                                                ))}
-                                                {meeting.participants.length > 3 && (
-                                                    <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-sm">
-                                                        +{meeting.participants.length - 3}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
+                                        <MeetingCard
+                                            key={meeting.id}
+                                            title={meeting.title}
+                                            time={meeting.start_time}
+                                            description={meeting.description}
+                                            teamId={meeting.team_id}
+                                            eventType={meeting.type}
+                                            duration={meeting.duration_minutes}
+                                            participants={meeting.participants}
+                                            onClick={() => setSelectedMeeting(meeting)}
+                                        />
                                     ))}
                                     {todayTasks.map(task => (
-                                        <div key={task.id} className="flex items-center space-x-4 p-3 rounded-lg border hover:bg-accent">
-                                            <div className="bg-grey-100 rounded-full p-2 min-w-[80px] text-center">
-                                                <div className="text-gray-500">
-                                                    Task
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium truncate">{task.title}</p>
-                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                    <span className={cn(
-                                                        "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
-                                                        task.type === "FEATURE" && "bg-purple-50 text-purple-700 ring-purple-600/20",
-                                                        task.type === "BUG" && "bg-red-50 text-red-700 ring-red-600/20",
-                                                        task.type === "DOCUMENTATION" && "bg-blue-50 text-blue-700 ring-blue-600/20"
-                                                    )}>
-                                                        {task.type}
-                                                    </span>
-                                                    <span>{task.priority} Priority</span>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <TaskCard
+                                            key={task.id}
+                                            title={task.title}
+                                            description={task.description}
+                                            teamId={task.team_id}
+                                            status={task.status}
+                                            priority={task.priority}
+                                            dueDate={task.due_date}
+                                            eventType={task.type}
+                                            assignees={task.assignees}
+                                            onClick={() => setSelectedTask(task)}
+                                        />
                                     ))}
                                     {todayMeetings.length === 0 && todayTasks.length === 0 && (
                                         <div className="text-center text-muted-foreground py-4">
@@ -129,57 +360,31 @@ export default function PEvents({ meetings, tasks, date, setDate }: PEventsProps
                                 <h3 className="text-lg font-semibold mb-4">Upcoming</h3>
                                 <div className="space-y-4">
                                     {upcomingMeetings.slice(0, 5).map(meeting => (
-                                        <div key={meeting.id} className="flex items-center space-x-4 p-3 rounded-lg border hover:bg-accent">
-                                            <div className="bg-grey-100 rounded-full p-2 min-w-[80px] text-center">
-                                                <div className="text-gray-500">
-                                                    Meeting
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium truncate">{meeting.title}</p>
-                                                <p className="text-sm text-muted-foreground">
-                                                    {format(parseISO(meeting.start_time), 'EEE, MMM d')} at {format(parseISO(meeting.start_time), 'h:mm a')}
-                                                </p>
-                                            </div>
-                                            <div className="flex -space-x-2">
-                                                {meeting.participants.slice(0, 3).map((participant, i) => (
-                                                    <UserAvatar
-                                                        key={i}
-                                                        userId={participant.id}
-                                                        name={participant.name || participant.full_name}
-                                                        className="h-8 w-8 border-2 border-background"
-                                                    />
-                                                ))}
-                                                {meeting.participants.length > 3 && (
-                                                    <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-sm">
-                                                        +{meeting.participants.length - 3}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
+                                        <MeetingCard
+                                            key={meeting.id}
+                                            title={meeting.title}
+                                            time={meeting.start_time}
+                                            description={meeting.description}
+                                            teamId={meeting.team_id}
+                                            eventType={meeting.type}
+                                            duration={meeting.duration_minutes}
+                                            participants={meeting.participants}
+                                            onClick={() => setSelectedMeeting(meeting)}
+                                        />
                                     ))}
                                     {upcomingTasks.slice(0, 5).map(task => (
-                                        <div key={task.id} className="flex items-center space-x-4 p-3 rounded-lg border hover:bg-accent">
-                                            <div className="bg-grey-100 rounded-full p-2 min-w-[80px] text-center">
-                                                <div className="text-gray-500">
-                                                    Task
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium truncate">{task.title}</p>
-                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                    <span className={cn(
-                                                        "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
-                                                        task.type === "FEATURE" && "bg-purple-50 text-purple-700 ring-purple-600/20",
-                                                        task.type === "BUG" && "bg-red-50 text-red-700 ring-red-600/20",
-                                                        task.type === "DOCUMENTATION" && "bg-blue-50 text-blue-700 ring-blue-600/20"
-                                                    )}>
-                                                        {task.type}
-                                                    </span>
-                                                    <span>Due {format(parseISO(task.due_date!), 'EEE, MMM d')}</span>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <TaskCard
+                                            key={task.id}
+                                            title={task.title}
+                                            description={task.description}
+                                            teamId={task.team_id}
+                                            status={task.status}
+                                            priority={task.priority}
+                                            dueDate={task.due_date}
+                                            eventType={task.type}
+                                            assignees={task.assignees}
+                                            onClick={() => setSelectedTask(task)}
+                                        />
                                     ))}
                                     {upcomingMeetings.length === 0 && upcomingTasks.length === 0 && (
                                         <div className="text-center text-muted-foreground py-4">
@@ -362,8 +567,8 @@ export default function PEvents({ meetings, tasks, date, setDate }: PEventsProps
                                                             {meeting.participants.slice(0, 2).map((participant, i) => (
                                                                 <UserAvatar
                                                                     key={i}
-                                                                    userId={participant.id}
-                                                                    name={participant.name || participant.full_name}
+                                                                    userId={getUserId(participant)}
+                                                                    name={getDisplayName(participant)}
                                                                     className="h-6 w-6 border-2 border-background"
                                                                 />
                                                             ))}
@@ -389,6 +594,26 @@ export default function PEvents({ meetings, tasks, date, setDate }: PEventsProps
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Task Detail Modal */}
+            {selectedTask && (
+                <TaskDetail
+                    isOpen={!!selectedTask}
+                    onClose={() => setSelectedTask(undefined)}
+                    task={selectedTask}
+                    teamId={selectedTask.team_id}
+                />
+            )}
+
+            {/* Meeting Detail Modal */}
+            {selectedMeeting && (
+                <MeetingDetail
+                    isOpen={!!selectedMeeting}
+                    onClose={() => setSelectedMeeting(undefined)}
+                    meeting={selectedMeeting}
+                    teamId={selectedMeeting.team_id}
+                />
+            )}
         </div>
     );
 }

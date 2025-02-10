@@ -1,97 +1,132 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import useSWR, { mutate } from 'swr';
 import { teamApi } from '@/services/teamApi';
 import { Team, CreateTeamInput, UpdateTeamInput, AddTeamMemberInput } from '@/lib/types/team';
 import { useUser } from './useUser';
 
-// Query keys
+// Simplified cache keys
 export const teamKeys = {
-    all: ['teams'] as const,
-    lists: () => [...teamKeys.all, 'list'] as const,
-    list: (userId: number) => [...teamKeys.lists(), { userId }] as const,
-    details: () => [...teamKeys.all, 'detail'] as const,
-    detail: (id: number) => [...teamKeys.details(), id] as const,
+    all: () => ['teams'],
+    userTeams: (userId?: number) => [...teamKeys.all(), 'user', userId],
+    teamDetail: (teamId?: number) => [...teamKeys.all(), 'detail', teamId],
 };
 
 export function useTeams() {
-    const queryClient = useQueryClient();
     const { user } = useUser();
+    const userId = user?.id;
 
-
-    // Pre-fetch check of cached data
-    const cachedData = queryClient.getQueryData(teamKeys.list(user?.id as number));
-
-    // Fetch teams query
+    // Main teams query with proper typing
     const {
         data: teams = [],
         isLoading,
-        error,
-        isFetching,
-        isRefetching,
-    } = useQuery({
-        queryKey: teamKeys.list(user?.id as number),
-        queryFn: async () => {
-            const result = await teamApi.getUserTeams(user?.id as number);
+        error: teamsError,
+        mutate: mutateTeams
+    } = useSWR<Team[]>(
+        teamKeys.userTeams(userId),
+        async () => {
+            console.log('[useTeams] Starting teams fetch');
+            const teams = await teamApi.getUserTeams(userId);
+            console.log('[useTeams] Fetched teams', { count: teams.length });
+            return teams;
+        },
+        {
+            revalidateOnFocus: true,
+            revalidateOnReconnect: true,
+            dedupingInterval: 0,
+            shouldRetryOnError: false,
+            revalidateIfStale: true,
+            revalidateOnMount: true
+        }
+    );
+
+    // Unified mutation handler
+    const handleMutation = async <T>({
+        operation,
+        teamId,
+        data,
+        optimisticUpdate,
+    }: {
+        operation: () => Promise<T>;
+        teamId?: number;
+        data?: any;
+        optimisticUpdate?: (current: Team[]) => Team[];
+    }) => {
+        if (!userId) return;
+
+        try {
+            // Optimistic update
+            if (optimisticUpdate) {
+                await mutateTeams(optimisticUpdate, false);
+            }
+
+            // Perform operation
+            const result = await operation();
+
+            // Revalidate relevant queries
+            const revalidation = [];
+            if (teamId) revalidation.push(mutate(teamKeys.teamDetail(teamId)));
+            revalidation.push(mutateTeams());
+
+            await Promise.all(revalidation);
             return result;
-        },
-        enabled: !!user?.id,
-        staleTime: Infinity, // Never consider data stale automatically
-        gcTime: 24 * 60 * 60 * 1000, // Keep in cache for 24 hours
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
-        placeholderData: keepPreviousData => {
-            return keepPreviousData ?? [];
-        },
-    });
+        } catch (error) {
+            // Rollback on error
+            await mutateTeams();
+            throw error;
+        }
+    };
 
+    // Create team
+    const createTeam = (newTeam: CreateTeamInput) =>
+        handleMutation({
+            operation: () => teamApi.createTeam(newTeam),
+            optimisticUpdate: (current) => [
+                ...current,
+                { ...newTeam, id: Date.now(), members: [] } as Team // Temporary ID
+            ],
+        });
 
-    // Create team mutation
-    const createTeam = useMutation({
-        mutationFn: (newTeam: CreateTeamInput) => teamApi.createTeam(newTeam),
-        onSuccess: async () => {
-            // Invalidate and refetch teams list
-            await queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
-            // Force an immediate refetch
-            await queryClient.refetchQueries({ queryKey: teamKeys.lists() });
-        },
-    });
+    // Update team
+    const updateTeam = (teamId: number, data: UpdateTeamInput) =>
+        handleMutation({
+            teamId,
+            operation: () => teamApi.updateTeam(teamId, data),
+            optimisticUpdate: (current) =>
+                current.map(team =>
+                    team.id === teamId ? { ...team, ...data } : team
+                ),
+        });
 
-    // Update team mutation
-    const updateTeam = useMutation({
-        mutationFn: ({ teamId, data }: { teamId: number; data: UpdateTeamInput }) =>
-            teamApi.updateTeam(teamId, data),
-        onSuccess: (_, { teamId }) => {
-            queryClient.invalidateQueries({ queryKey: teamKeys.detail(teamId) });
-            queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
-        },
-    });
+    // Delete team
+    const deleteTeam = (teamId: number) =>
+        handleMutation({
+            teamId,
+            operation: () => teamApi.deleteTeam(teamId),
+            optimisticUpdate: (current) =>
+                current.filter(team => team.id !== teamId),
+        });
 
-    // Delete team mutation
-    const deleteTeam = useMutation({
-        mutationFn: (teamId: number) => teamApi.deleteTeam(teamId),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
-        },
-    });
-
-    // Add team member mutation
-    const addTeamMember = useMutation({
-        mutationFn: ({ teamId, data }: { teamId: number; data: AddTeamMemberInput }) =>
-            teamApi.addTeamMember(teamId, data),
-        onSuccess: (_, { teamId }) => {
-            queryClient.invalidateQueries({ queryKey: teamKeys.detail(teamId) });
-            queryClient.invalidateQueries({ queryKey: teamKeys.lists() });
-        },
-    });
+    // Add team member
+    const addTeamMember = (teamId: number, data: AddTeamMemberInput) =>
+        handleMutation({
+            teamId,
+            operation: () => teamApi.addTeamMember(teamId, data),
+            optimisticUpdate: (current) =>
+                current.map(team =>
+                    team.id === teamId ? {
+                        ...team,
+                        members: [...(team.members || []), data]
+                    } : team
+                ),
+        });
 
     return {
         teams,
+        teamsError,
         isLoading,
-        isFetching,
-        error,
         createTeam,
         updateTeam,
         deleteTeam,
         addTeamMember,
+        mutateTeams
     };
 }

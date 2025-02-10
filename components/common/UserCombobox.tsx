@@ -46,10 +46,6 @@ export function UserCombobox({ teamId, selectedUsers, onSelectionChange, placeho
         };
 
         loadUsers();
-        console.log('teamId', teamId);
-        console.log('open', open);
-        console.log('users', users);
-
     }, [teamId]);
 
     const selectedUserObjects = users.filter(user => selectedUsers.includes(user.id));
