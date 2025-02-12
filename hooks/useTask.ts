@@ -24,14 +24,13 @@ export function useTask(teamId?: number, taskId?: string) {
         teams?.length ? taskKeys.teamTasks(teamId) : null,
         async () => {
             if (!teamId) {
+                // Fetch tasks for all teams
                 const allTasks = await Promise.all(
                     teams.map(team => taskApi.listTasks(team.id))
                 );
-                const flattened = allTasks.flat();
-                return flattened;
+                return allTasks.flat();
             }
-            const tasks = await taskApi.listTasks(teamId);
-            return tasks;
+            return await taskApi.listTasks(teamId);
         },
         {
             revalidateOnFocus: false,
@@ -75,12 +74,10 @@ export function useTask(teamId?: number, taskId?: string) {
         operation: () => Promise<T>;
         optimisticUpdate?: (current: Task[]) => Task[];
     }) => {
-        if (!teamId) return;
-
         try {
             // Optimistic update if provided
             if (optimisticUpdate && tasks) {
-                // Update the list view for current team
+                // Update the list view
                 await mutate(
                     taskKeys.teamTasks(teamId),
                     optimisticUpdate(tasks),
@@ -122,17 +119,18 @@ export function useTask(teamId?: number, taskId?: string) {
 
     // Create task
     const createTask = async (data: CreateTaskInput) => {
+        if (!data.team) {
+            throw new Error('Team ID is required to create a task');
+        }
+
         return handleMutation({
-            operation: () => taskApi.createTask(teamId!, {
-                ...data,
-                assignee_ids: data.assignees?.map(a => a.id.toString()) || [],
-            }),
+            operation: () => taskApi.createTask(data.team, data),
             optimisticUpdate: (current) => [
                 {
                     ...data,
                     id: Date.now().toString(),
                     taskId: `T-${Date.now()}`,
-                    team_id: teamId!,
+                    team_id: data.team,
                     created_at: new Date().toISOString(),
                     assignees: data.assignees || [],
                     watchers: [],
@@ -144,32 +142,14 @@ export function useTask(teamId?: number, taskId?: string) {
 
     // Update task
     const updateTask = async (taskId: string, data: Partial<CreateTaskInput>) => {
+        // Find the task to get its team_id
+        const taskToUpdate = tasks.find(t => t.id === taskId);
+        if (!taskToUpdate) {
+            throw new Error('Task not found');
+        }
+
         return handleMutation({
-            operation: () => {
-                // Get current task data
-                const currentTask = tasks?.find(t => t.id === taskId);
-                if (!currentTask) {
-                    throw new Error("Task not found");
-                }
-
-                // Compare current and new assignees to determine changes
-                const currentAssigneeIds = new Set(currentTask.assignees.map(a => a.id));
-                const newAssigneeIds = new Set(data.assignees?.map(a =>
-                    typeof a === 'string' ? a : a.id
-                ));
-
-                // Only include assignee_ids if they've actually changed
-                const assigneeIdsChanged =
-                    currentAssigneeIds.size !== newAssigneeIds.size ||
-                    ![...currentAssigneeIds].every(id => newAssigneeIds.has(id));
-
-                return taskApi.updateTask(teamId!, parseInt(taskId), {
-                    ...data,
-                    assignee_ids: assigneeIdsChanged ?
-                        [...newAssigneeIds].filter(id => id !== '') :
-                        undefined
-                });
-            },
+            operation: () => taskApi.updateTask(taskToUpdate.team_id, parseInt(taskId), data),
             optimisticUpdate: (current) =>
                 current.map(t =>
                     t.id === taskId ? {

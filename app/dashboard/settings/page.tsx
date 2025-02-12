@@ -16,6 +16,8 @@ import { Loader2, Upload } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ImageCropper } from '@/components/ui/image-cropper';
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { useUser } from '@/hooks/useUser';
+import { revalidateUserData } from '@/hooks/useUserData';
 
 
 interface UserSettings {
@@ -43,6 +45,8 @@ export default function SettingsPage() {
     const [settings, setSettings] = useState<UserSettings | null>(null);
     const [avatarFile, setAvatarFile] = useState<File | null>(null);
     const [cropFile, setCropFile] = useState<File | null>(null);
+
+    const { user } = useUser();
 
     useEffect(() => {
         fetchUserSettings();
@@ -98,11 +102,11 @@ export default function SettingsPage() {
             // Upload new avatar
             const fileName = `${user.id}/${Date.now()}.jpg`;
 
-            const { error: uploadError, data } = await supabase.storage
+            const { error: uploadError } = await supabase.storage
                 .from('avatars')
                 .upload(fileName, file, {
                     cacheControl: '3600',
-                    upsert: true // Changed to true to handle overwrites
+                    upsert: true
                 });
 
             if (uploadError) throw uploadError;
@@ -114,8 +118,6 @@ export default function SettingsPage() {
 
             // Add cache-busting parameter
             const finalUrl = `${publicUrl}?v=${Date.now()}`;
-
-            console.log('Final URL:', finalUrl); // For debugging
 
             // Update user record
             const { error: updateError } = await supabase
@@ -130,6 +132,9 @@ export default function SettingsPage() {
 
             // Update local state
             setSettings(prev => prev ? { ...prev, avatar_url: finalUrl } : null);
+
+            // Revalidate user data in SWR cache
+            await revalidateUserData(user.id);
 
             toast({
                 title: "Success",

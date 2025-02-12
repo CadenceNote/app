@@ -13,13 +13,7 @@ export const userApi = {
     // Get user data with caching
     getUserData: async (userId: string): Promise<User | null> => {
         try {
-            // Check local storage cache first
-            const cachedData = localStorage.getItem(`${AVATAR_CACHE_PREFIX}${userId}`);
-            if (cachedData) {
-                return JSON.parse(cachedData);
-            }
-
-            // If not in cache, fetch from database
+            // Fetch from database
             const { data: userData, error } = await supabase
                 .from('users')
                 .select('supabase_uid, email, full_name, avatar_url')

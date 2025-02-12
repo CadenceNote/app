@@ -55,7 +55,7 @@ export default function PTask({ searchTerm }: PTaskProps) {
     const [selectedTask, setSelectedTask] = useState<Task | undefined>();
     const [activeTab, setActiveTab] = useState("assigned");
 
-    // Use task hook with selected team
+    // Use task hook - it will handle both all teams and single team cases
     const { tasks, createTask, updateTask } = useTask(
         selectedTeamId === "all" ? undefined : Number(selectedTeamId)
     );
@@ -70,13 +70,6 @@ export default function PTask({ searchTerm }: PTaskProps) {
         });
         setIsCreateModalOpen(false);
         return newTask;
-    };
-
-    const handleTaskUpdate = async (taskId: string, data: any) => {
-        if (selectedTeamId === "all") {
-            throw new Error("Please select a team to update a task");
-        }
-        return await updateTask(taskId, data);
     };
 
     // Filter tasks based on user's role
@@ -188,7 +181,7 @@ export default function PTask({ searchTerm }: PTaskProps) {
                     onClose={() => setSelectedTask(undefined)}
                     task={selectedTask}
                     teamId={selectedTask.team_id}
-                    onTaskUpdate={handleTaskUpdate}
+                    onTaskUpdate={updateTask}
                 />
             )}
         </div>

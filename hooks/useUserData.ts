@@ -1,9 +1,26 @@
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 import { userApi } from '@/services/userApi';
 
 // Cache key for user data
 export const userDataKeys = {
     user: (userId?: string) => ['user_data', userId],
+    all: () => ['user_data']
+};
+
+// Function to revalidate user data
+export const revalidateUserData = async (userId?: string) => {
+    // Clear localStorage cache first
+    userApi.clearUserCache(userId);
+
+    // Then revalidate SWR cache
+    if (userId) {
+        await mutate(userDataKeys.user(userId));
+    }
+    // Also revalidate all user data
+    await mutate(userDataKeys.all());
+
+    // Force revalidate team users cache
+    await mutate((key: any) => Array.isArray(key) && key[0] === 'team-users');
 };
 
 export function useUserData(userId: string | undefined) {
@@ -29,13 +46,16 @@ export function useUserData(userId: string | undefined) {
             revalidateOnFocus: true,
             revalidateOnReconnect: true,
             dedupingInterval: 5000,
-            shouldRetryOnError: false
+            shouldRetryOnError: false,
         }
     );
+
+    console.log(userData);
 
     return {
         userData,
         isLoading,
-        error
+        error,
+        revalidate: () => revalidateUserData(userId)
     };
 } 

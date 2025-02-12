@@ -27,7 +27,6 @@ export function UserAvatar({
 
     // Use userData.avatar_url if available and no imageUrl provided
     const finalImageUrl = imageUrl || userData?.avatar_url;
-
     useEffect(() => {
         if (finalImageUrl) {
             const cached = getCachedUrl(finalImageUrl);

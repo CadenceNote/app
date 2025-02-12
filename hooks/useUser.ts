@@ -1,6 +1,7 @@
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 import { supabase } from '@/lib/supabase';
 import { userApi } from '@/services/userApi';
+import { userDataKeys, revalidateUserData } from '@/hooks/useUserData';
 
 interface User {
     id: string;
@@ -19,7 +20,7 @@ export const userKeys = {
 
 export function useUser() {
     // Use SWR for fetching user data
-    const { data, error, isLoading, mutate } = useSWR(
+    const { data, error, isLoading, mutate: mutateUser } = useSWR(
         userKeys.current(),
         async () => {
             try {
@@ -65,10 +66,15 @@ export function useUser() {
 
     // Setup auth state change listener
     useSWR(userKeys.current(), () => {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_OUT') {
-                // Just revalidate the data when signed out
-                await mutate(userKeys.current());
+                await mutateUser(null);
+            } else if (session?.user) {
+                // Revalidate both user and user data caches
+                await Promise.all([
+                    mutateUser(),
+                    revalidateUserData(session.user.id)
+                ]);
             }
         });
         return () => subscription.unsubscribe();
@@ -78,6 +84,14 @@ export function useUser() {
         user: data,
         isLoading,
         error: error as Error | null,
+        revalidate: async () => {
+            if (data?.id) {
+                await Promise.all([
+                    mutateUser(),
+                    revalidateUserData(data.id)
+                ]);
+            }
+        }
     };
 }
 

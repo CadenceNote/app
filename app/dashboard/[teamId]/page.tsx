@@ -21,7 +21,6 @@ import { useTeams } from '@/hooks/useTeams';
 import { useMeeting } from '@/hooks/useMeeting';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from "@/hooks/use-toast"
-import { NotificationBell } from "@/components/notifications/NotificationBell"
 
 export default function TeamDashboardPage() {
     const params = useParams();
