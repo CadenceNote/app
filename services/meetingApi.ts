@@ -142,6 +142,10 @@ export const meetingApi = {
 
     // Create meeting
     createMeeting: async (teamId: number, data: CreateMeetingInput): Promise<Meeting> => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+
         const { data: meeting, error } = await supabase
             .from('meetings')
             .insert({
@@ -169,6 +173,9 @@ export const meetingApi = {
             .insert(participantRows);
 
         if (participantError) throw participantError;
+
+        // Send notifications to participants
+
 
         // Get the complete meeting data with participants
         return meetingApi.getMeeting(teamId, meeting.id);

@@ -134,21 +134,6 @@ export function MeetingDetail({ isOpen, onClose, meeting, teamId, onMeetingUpdat
         }
     );
 
-    // Listen for window focus events to revalidate meeting data
-    useEffect(() => {
-        const handleWindowFocus = () => {
-            if (meeting?.id && teamId) {
-                console.log("Window focused: revalidating meeting data");
-                mutate(`meetings/${teamId}/${meeting.id}`);
-            }
-        };
-
-        window.addEventListener('focus', handleWindowFocus);
-        return () => {
-            window.removeEventListener('focus', handleWindowFocus);
-        };
-    }, [teamId, meeting?.id]);
-
     // Update meeting function
     const updateMeeting = async ({ teamId, meetingId, data }: UpdateMeetingInput) => {
         if (!currentMeeting) return;

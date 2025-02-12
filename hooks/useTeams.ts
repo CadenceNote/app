@@ -23,9 +23,7 @@ export function useTeams() {
     } = useSWR<Team[]>(
         teamKeys.userTeams(userId),
         async () => {
-            console.log('[useTeams] Starting teams fetch');
             const teams = await teamApi.getUserTeams(userId);
-            console.log('[useTeams] Fetched teams', { count: teams.length });
             return teams;
         },
         {

@@ -38,13 +38,15 @@ import { useUser } from '@/hooks/useUser';
 import { UserCombobox } from "@/components/common/UserCombobox";
 import useSWR, { mutate } from 'swr';
 import { taskKeys } from '@/hooks/useTask';
+import useSWRMutation from 'swr/mutation';
+import { useTask } from '@/hooks/useTask';
 
 interface TaskDetailProps {
     isOpen: boolean
     onClose: () => void
     task: Task | undefined
     teamId: number
-    onTaskUpdate?: (task: Task) => void
+    onTaskUpdate: (taskId: string, data: Partial<CreateTaskInput>) => Promise<Task | undefined>
 }
 
 interface DetailFieldProps {
@@ -189,6 +191,7 @@ const hasReplies = (commentId: number, comments: Comment[]): boolean => {
 
 export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: TaskDetailProps) {
     const [formData, setFormData] = useState(defaultFormData);
+    const [isEditMode, setIsEditMode] = useState(false);
     const [newComment, setNewComment] = useState('');
     const [replyToComment, setReplyToComment] = useState<{ id: number; content: string } | null>(null);
     const [startDate, setStartDate] = useState<Date | undefined>();
@@ -201,157 +204,15 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
     const { user } = useUser();
     const { toast } = useToast();
 
-    // Query for fetching complete task data
-    const { data: fullTaskData, isLoading, mutate: mutateTask } = useSWR(
-        isOpen && task?.id && teamId ? `tasks/${teamId}/${task.id}` : null,
-        () => {
-            if (!task?.id || !teamId) return null;
-            return taskApi.getTask(teamId, parseInt(task.id.toString()));
-        }
-    );
-
-    // Update task function
-    const updateTask = async (data: Partial<CreateTaskInput>) => {
-        if (!task?.id || !teamId || !fullTaskData) {
-            throw new Error('Missing required task or team ID');
-        }
-        const taskId = parseInt(task.id.toString());
-        if (isNaN(taskId)) {
-            throw new Error('Invalid task ID');
-        }
-
-        try {
-            // Optimistically update both the detail view and the list view
-            const optimisticData = { ...fullTaskData, ...data };
-
-            // Update the detail view cache
-            await mutate(
-                taskKeys.taskDetail(teamId, task.id.toString()),
-                optimisticData,
-                false
-            );
-
-            // Update the list view cache
-            await mutate(
-                taskKeys.teamTasks(teamId),
-                (currentTasks: Task[] | undefined) => {
-                    if (!currentTasks) return currentTasks;
-                    return currentTasks.map(t =>
-                        t.id === task.id ? { ...t, ...data } : t
-                    );
-                },
-                false
-            );
-
-            // Also update the all teams view if we're in that mode
-            await mutate(
-                taskKeys.allTeams(),
-                (currentTasks: Task[] | undefined) => {
-                    if (!currentTasks) return currentTasks;
-                    return currentTasks.map(t =>
-                        t.id === task.id ? { ...t, ...data } : t
-                    );
-                },
-                false
-            );
-
-            // Make the API call
-            const updatedTask = await taskApi.updateTask(teamId, taskId, data);
-
-            // Update all caches with the server response
-            await Promise.all([
-                mutate(taskKeys.taskDetail(teamId, task.id.toString()), updatedTask),
-                mutate(taskKeys.teamTasks(teamId)),
-                mutate(taskKeys.allTeams())
-            ]);
-
-            // Call the onTaskUpdate callback if provided
-            if (onTaskUpdate) {
-                onTaskUpdate(updatedTask);
-            }
-
-            return updatedTask;
-        } catch (error) {
-            // Revalidate on error to ensure we have the correct data
-            await Promise.all([
-                mutate(taskKeys.taskDetail(teamId, task.id.toString())),
-                mutate(taskKeys.teamTasks(teamId)),
-                mutate(taskKeys.allTeams())
-            ]);
-            throw error;
-        }
-    };
-
-    // Add comment function
-    const addComment = async (content: string, parentId?: number) => {
-        if (!task?.id || !teamId) {
-            throw new Error('Missing required task or team ID');
-        }
-
-        try {
-            const newComment = await taskApi.addComment(teamId, parseInt(task.id.toString()), content, parentId);
-
-            // Revalidate the task data to include the new comment
-            await mutate(`tasks/${teamId}/${task.id}`);
-
-            return newComment;
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to add comment",
-                variant: "destructive"
-            });
-            throw error;
-        }
-    };
-
-    // Delete comment function
-    const deleteComment = async (commentId: number) => {
-        if (!task?.id || !teamId) {
-            throw new Error('Missing required task or team ID');
-        }
-
-        try {
-            await taskApi.deleteComment(teamId, parseInt(task.id.toString()), commentId);
-            // Revalidate the task data to remove the deleted comment
-            await mutate(`tasks/${teamId}/${task.id}`);
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to delete comment",
-                variant: "destructive"
-            });
-            throw error;
-        }
-    };
-
-    // Toggle watch function
-    const toggleWatch = async () => {
-        if (!task?.id || !teamId) {
-            throw new Error('Missing required task or team ID');
-        }
-
-        try {
-            const updatedTask = await taskApi.toggleWatch(teamId, parseInt(task.id.toString()));
-            // Update the cache with the new watch status
-            await mutate(`tasks/${teamId}/${task.id}`, updatedTask);
-            setIsWatching(updatedTask.is_watching || false);
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to update watch status",
-                variant: "destructive"
-            });
-            throw error;
-        }
-    };
-
-    // Effect to refetch data when modal opens
-    useEffect(() => {
-        if (isOpen && task?.id && teamId) {
-            mutateTask();
-        }
-    }, [isOpen, task?.id, teamId, mutateTask]);
+    // Use the task hook for all operations
+    const {
+        task: fullTaskData,
+        isLoadingTask: isLoading,
+        addComment: addCommentMutation,
+        deleteComment: deleteCommentMutation,
+        toggleWatch: toggleWatchMutation,
+        mutateTask
+    } = useTask(teamId, task?.id?.toString());
 
     // Effect to update form data when task data changes
     useEffect(() => {
@@ -370,42 +231,130 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
 
             setStartDate(fullTaskData.start_date ? new Date(fullTaskData.start_date) : undefined);
             setDueDate(fullTaskData.due_date ? new Date(fullTaskData.due_date) : undefined);
-            setIsWatching(fullTaskData.is_watching || false);
+            setIsWatching(!!fullTaskData.is_watching);
         }
     }, [fullTaskData]);
 
-    // Handle form submission with loading state
-    const handleSubmit = () => {
-        if (isLoading) {
-            console.log("Already submitting, returning");
-            return;
-        }
-
-        if (!task?.id) {
-            toast({
-                title: "Error",
-                description: "Cannot update task: No task ID available",
-                variant: "destructive"
-            });
-            return;
-        }
-
-        const submitData = {
-            ...formData,
-            start_date: startDate?.toISOString(),
-            due_date: dueDate?.toISOString(),
-            assignees: formData.assignees.map(a => a.id.toString()),
-        };
-        console.log("submitData", submitData);
+    // Handle comment submission
+    const handleAddComment = async () => {
+        if (!newComment.trim()) return;
 
         try {
-            updateTask(submitData);
-            console.log("SUBMITTED TO MUTATION");
+            await addCommentMutation(newComment, replyToComment?.id);
+            setNewComment('');
+            setReplyToComment(null);
+            toast({
+                title: "Success",
+                description: "Comment added successfully",
+            });
         } catch (error) {
-            console.error("Error submitting mutation:", error);
+            console.error("Error adding comment:", error);
             toast({
                 title: "Error",
-                description: "Failed to start update. Please try again.",
+                description: "Failed to add comment",
+                variant: "destructive"
+            });
+        }
+    };
+
+    // Handle comment deletion
+    const handleDeleteComment = async (commentId: number) => {
+        if (!fullTaskData) return;
+
+        const hasChildComments = hasReplies(commentId, fullTaskData.comments || []);
+
+        if (hasChildComments) {
+            const confirmed = window.confirm(
+                "This comment has replies. Deleting it will also delete all replies. Are you sure you want to continue?"
+            );
+            if (!confirmed) return;
+        }
+
+        try {
+            await deleteCommentMutation(commentId);
+            toast({
+                title: "Success",
+                description: "Comment deleted successfully",
+            });
+        } catch (error) {
+            console.error("Error deleting comment:", error);
+            toast({
+                title: "Error",
+                description: "Failed to delete comment",
+                variant: "destructive"
+            });
+        }
+    };
+
+    // Handle watch toggle
+    const toggleWatch = async () => {
+        try {
+            const result = await toggleWatchMutation();
+            if (result) {
+                setIsWatching(!!result.is_watching);
+                toast({
+                    title: "Success",
+                    description: result.is_watching ? "Added to watch list" : "Removed from watch list",
+                });
+            }
+        } catch (error) {
+            console.error("Error toggling watch:", error);
+            setIsWatching(!!fullTaskData?.is_watching);
+            toast({
+                title: "Error",
+                description: "Failed to update watch status",
+                variant: "destructive"
+            });
+        }
+    };
+
+    // Handle task update
+    const handleSubmit = async () => {
+        if (!task?.id) return;
+
+        try {
+            const submitData = {
+                title: formData.title,
+                description: formData.description,
+                status: formData.status,
+                priority: formData.priority,
+                type: formData.type,
+                start_date: startDate?.toISOString(),
+                due_date: dueDate?.toISOString(),
+                assignees: formData.assignees.map(a => typeof a === 'string' ? a : a.id),
+                category: formData.category
+            };
+
+            const result = await onTaskUpdate(task.id, submitData);
+
+            if (result) {
+                // Update local form data with the returned result
+                setFormData({
+                    title: result.title || '',
+                    description: result.description || '',
+                    status: result.status,
+                    priority: result.priority,
+                    type: result.type || TaskType.TASK,
+                    start_date: result.start_date,
+                    due_date: result.due_date,
+                    assignees: result.assignees || [],
+                    category: result.category || '',
+                });
+
+                // Update the task detail cache
+                await mutateTask(result, { revalidate: false });
+
+                setIsEditMode(false);
+                toast({
+                    title: "Success",
+                    description: "Task updated successfully",
+                });
+            }
+        } catch (error) {
+            console.error("Error updating task:", error);
+            toast({
+                title: "Error",
+                description: "Failed to update task. Please try again.",
                 variant: "destructive"
             });
         }
@@ -433,39 +382,12 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
         );
     }
 
-    // Handle comment addition with loading state
-    const handleAddComment = () => {
-        if (isLoading || !newComment.trim()) return;
-
-        addComment(newComment, replyToComment?.id);
-    };
-
-    // Handle comment deletion with loading state
-    const handleDeleteComment = async (commentId: number) => {
-        if (isLoading || !fullTaskData) return;
-
-        const hasChildComments = hasReplies(commentId, fullTaskData.comments || []);
-
-        if (hasChildComments) {
-            const confirmed = window.confirm(
-                "This comment has replies. Deleting it will also delete all replies. Are you sure you want to continue?"
-            );
-            if (!confirmed) return;
-        }
-
-        deleteComment(commentId);
-    };
-
-    // Handle watch toggle with loading state
-    const toggleWatchWithLoading = () => {
-        if (isLoading) return;
-        toggleWatch();
-    };
-
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogTitle>
-                {fullTaskData?.title || 'Task Details'}
+            <DialogTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    {fullTaskData?.title || 'Task Details'}
+                </div>
             </DialogTitle>
             <DialogDescription>
                 Task details and configuration
@@ -483,30 +405,77 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                 <Button
                                     variant={isWatching ? "secondary" : "outline"}
                                     size="sm"
-                                    onClick={toggleWatchWithLoading}
+                                    onClick={toggleWatch}
                                 >
                                     <Eye className="mr-2 h-4 w-4" />
                                     {isWatching ? "Watching" : "Watch"}
                                 </Button>
                             </div>
-                            {fullTaskData && (
-                                <div className="text-xs text-muted-foreground">
-                                    Created {new Date(fullTaskData.created_at).toLocaleDateString()} by {fullTaskData.created_by?.full_name || fullTaskData.created_by?.email}
-                                </div>
-                            )}
+                            <div className="flex items-center gap-2">
+                                {fullTaskData && (
+                                    <div className="text-xs text-muted-foreground">
+                                        Created {new Date(fullTaskData.created_at).toLocaleDateString()} by {fullTaskData.created_by?.full_name || fullTaskData.created_by?.email}
+                                    </div>
+                                )}
+                                {!isEditMode ? (
+                                    <Button
+                                        onClick={() => setIsEditMode(true)}
+                                        variant="outline"
+                                        size="sm"
+                                    >
+                                        Edit Task
+                                    </Button>
+                                ) : (
+                                    <>
+                                        <Button
+                                            onClick={() => setIsEditMode(false)}
+                                            variant="outline"
+                                            size="sm"
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            onClick={handleSubmit}
+                                            size="sm"
+                                            disabled={isLoading}
+                                        >
+                                            {isLoading ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                    Saving...
+                                                </>
+                                            ) : (
+                                                'Save Changes'
+                                            )}
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                        <Input
-                            value={formData.title}
-                            onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                            placeholder="Task title"
-                            className="text-xl font-semibold mb-4"
-                        />
-                        <Textarea
-                            value={formData.description}
-                            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                            placeholder="Add a description..."
-                            className="min-h-[100px] mb-6"
-                        />
+
+                        {isEditMode ? (
+                            <>
+                                <Input
+                                    value={formData.title}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                                    placeholder="Task title"
+                                    className="text-xl font-semibold mb-4"
+                                />
+                                <Textarea
+                                    value={formData.description}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                                    placeholder="Add a description..."
+                                    className="min-h-[100px] mb-6"
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <h1 className="text-xl font-semibold mb-4">{formData.title}</h1>
+                                <div className="prose mb-6">
+                                    {formData.description || 'No description provided.'}
+                                </div>
+                            </>
+                        )}
 
                         {/* Related Items Section */}
                         {(fullTaskData?.source_meeting_id || fullTaskData?.source_note_id || fullTaskData?.parent_id) && (
@@ -542,7 +511,7 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                         )}
 
                         {/* Activity Section */}
-                        {/* <div className="space-y-6">
+                        <div className="space-y-6">
                             {fullTaskData && <h2 className="text-lg font-semibold">Activity</h2>}
 
                             {fullTaskData && fullTaskData.comments && (
@@ -556,8 +525,10 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                             className="flex-1"
                                         />
                                         <div className="flex flex-col gap-2">
-                                            <Button onClick={handleAddComment}>
-                                                {replyToComment ? 'Reply' : 'Add'}
+                                            <Button
+                                                onClick={handleAddComment}
+                                            >
+                                                {newComment ? 'Add' : 'Add Comment'}
                                             </Button>
                                             {replyToComment && (
                                                 <Button
@@ -583,24 +554,6 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                                     </div>
                                 </div>
                             )}
-                        </div> */}
-
-                        {/* Save Button */}
-                        <div className="mt-6">
-                            <Button
-                                onClick={handleSubmit}
-                                className="w-full"
-                                disabled={isLoading}
-                            >
-                                {isLoading ? (
-                                    <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                        Saving...
-                                    </>
-                                ) : (
-                                    fullTaskData ? 'Update Task' : 'Create Task'
-                                )}
-                            </Button>
                         </div>
                     </div>
 
@@ -610,184 +563,221 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                             <DetailField
                                 label="Status"
                                 value={
-                                    <Select
-                                        value={formData.status}
-                                        onValueChange={(value: TaskStatus) => {
-                                            setFormData(prev => ({ ...prev, status: value }));
-                                        }}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue>
-                                                <StatusBadge status={formData.status} />
-                                            </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {Object.values(TaskStatus).map(status => (
-                                                <SelectItem key={status} value={status}>
-                                                    <StatusBadge status={status} />
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    isEditMode ? (
+                                        <Select
+                                            value={formData.status}
+                                            onValueChange={(value: TaskStatus) => {
+                                                setFormData(prev => ({ ...prev, status: value }));
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue>
+                                                    <StatusBadge status={formData.status} />
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.values(TaskStatus).map(status => (
+                                                    <SelectItem key={status} value={status}>
+                                                        <StatusBadge status={status} />
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <StatusBadge status={formData.status} />
+                                    )
                                 }
                             />
 
                             <DetailField
                                 label="Priority"
                                 value={
-                                    <Select
-                                        value={formData.priority}
-                                        onValueChange={(value: TaskPriority) => {
-                                            setFormData(prev => ({ ...prev, priority: value }));
-                                        }}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue>
-                                                <PriorityBadge priority={formData.priority} />
-                                            </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {Object.values(TaskPriority).map(priority => (
-                                                <SelectItem key={priority} value={priority}>
-                                                    <PriorityBadge priority={priority} />
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    isEditMode ? (
+                                        <Select
+                                            value={formData.priority}
+                                            onValueChange={(value: TaskPriority) => {
+                                                setFormData(prev => ({ ...prev, priority: value }));
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue>
+                                                    <PriorityBadge priority={formData.priority} />
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.values(TaskPriority).map(priority => (
+                                                    <SelectItem key={priority} value={priority}>
+                                                        <PriorityBadge priority={priority} />
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <PriorityBadge priority={formData.priority} />
+                                    )
                                 }
                             />
 
                             <DetailField
                                 label="Type"
                                 value={
-                                    <Select
-                                        value={formData.type}
-                                        onValueChange={(value: TaskType) => {
-                                            setFormData(prev => ({ ...prev, type: value }));
-                                        }}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue>
-                                                {formData.type}
-                                            </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {Object.values(TaskType).map(type => (
-                                                <SelectItem key={type} value={type}>
-                                                    {type}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    isEditMode ? (
+                                        <Select
+                                            value={formData.type}
+                                            onValueChange={(value: TaskType) => {
+                                                setFormData(prev => ({ ...prev, type: value }));
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue>
+                                                    {formData.type}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.values(TaskType).map(type => (
+                                                    <SelectItem key={type} value={type}>
+                                                        {type}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        formData.type
+                                    )
                                 }
                             />
 
                             <DetailField
                                 label="Assignees"
                                 value={
-                                    <UserCombobox
-                                        teamId={teamId}
-                                        selectedUsers={formData.assignees.map(a => a.id)}
-                                        onSelectionChange={(userIds) => {
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                assignees: userIds.map(id => ({
-                                                    id: id,
-                                                    email: teamMembers.find(m => m.id === id)?.email || '',
-                                                    full_name: teamMembers.find(m => m.id === id)?.full_name
-                                                }))
-                                            }));
-                                        }}
-                                        placeholder="Select assignees"
-                                    />
+                                    isEditMode ? (
+                                        <UserCombobox
+                                            teamId={teamId}
+                                            selectedUsers={formData.assignees.map(a => a.id)}
+                                            onSelectionChange={(userIds) => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    assignees: userIds.map(id => ({
+                                                        id: id,
+                                                        email: teamMembers.find(m => m.id === id)?.email || '',
+                                                        full_name: teamMembers.find(m => m.id === id)?.full_name
+                                                    }))
+                                                }));
+                                            }}
+                                            placeholder="Select assignees"
+                                        />
+                                    ) : (
+                                        <div className="flex flex-wrap gap-2">
+                                            {formData.assignees.map(assignee => (
+                                                <div key={assignee.id} className="flex items-center gap-2 bg-muted rounded-full px-3 py-1">
+                                                    <UserAvatar
+                                                        name={assignee.full_name || assignee.email}
+                                                        userId={assignee.id}
+                                                        className="h-6 w-6"
+                                                    />
+                                                    <span className="text-sm">
+                                                        {assignee.full_name || assignee.email}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
                                 }
                             />
 
                             <DetailField
                                 label="Due date"
                                 value={
-                                    <Popover
-                                        open={isDueDatePopoverOpen}
-                                        onOpenChange={setIsDueDatePopoverOpen}
-                                        modal={true}
-                                    >
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                className={cn(
-                                                    "w-full justify-start text-left font-normal",
-                                                    !dueDate && "text-muted-foreground"
-                                                )}
-                                            >
-                                                {dueDate ? format(dueDate, 'PPP') : <span>Pick a date</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent
-                                            className="w-auto p-0"
-                                            align="start"
-                                            side="bottom"
-                                            sideOffset={4}
-                                            style={calendarPopoverStyle}
+                                    isEditMode ? (
+                                        <Popover
+                                            open={isDueDatePopoverOpen}
+                                            onOpenChange={setIsDueDatePopoverOpen}
+                                            modal={true}
                                         >
-                                            <Calendar
-                                                mode="single"
-                                                selected={dueDate}
-                                                onSelect={(date) => {
-                                                    setDueDate(date);
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        due_date: date?.toISOString().split('T')[0]
-                                                    }));
-                                                    setIsDueDatePopoverOpen(false);
-                                                }}
-                                                initialFocus
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "w-full justify-start text-left font-normal",
+                                                        !dueDate && "text-muted-foreground"
+                                                    )}
+                                                >
+                                                    {dueDate ? format(dueDate, 'PPP') : <span>Pick a date</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                                className="w-auto p-0"
+                                                align="start"
+                                                side="bottom"
+                                                sideOffset={4}
+                                                style={calendarPopoverStyle}
+                                            >
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={dueDate}
+                                                    onSelect={(date) => {
+                                                        setDueDate(date);
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            due_date: date?.toISOString().split('T')[0]
+                                                        }));
+                                                        setIsDueDatePopoverOpen(false);
+                                                    }}
+                                                    initialFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    ) : (
+                                        dueDate ? format(dueDate, 'PPP') : 'No due date'
+                                    )
                                 }
                             />
 
                             <DetailField
                                 label="Start date"
                                 value={
-                                    <Popover
-                                        open={isStartDatePopoverOpen}
-                                        onOpenChange={setIsStartDatePopoverOpen}
-                                        modal={true}
-                                    >
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                className={cn(
-                                                    "w-full justify-start text-left font-normal",
-                                                    !startDate && "text-muted-foreground"
-                                                )}
-                                            >
-                                                {startDate ? format(startDate, 'PPP') : <span>Pick a date</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent
-                                            className="w-auto p-0"
-                                            align="start"
-                                            side="bottom"
-                                            sideOffset={4}
-                                            style={calendarPopoverStyle}
+                                    isEditMode ? (
+                                        <Popover
+                                            open={isStartDatePopoverOpen}
+                                            onOpenChange={setIsStartDatePopoverOpen}
+                                            modal={true}
                                         >
-                                            <Calendar
-                                                mode="single"
-                                                selected={startDate}
-                                                onSelect={(date) => {
-                                                    setStartDate(date);
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        start_date: date?.toISOString().split('T')[0]
-                                                    }));
-                                                    setIsStartDatePopoverOpen(false);
-                                                }}
-                                                initialFocus
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "w-full justify-start text-left font-normal",
+                                                        !startDate && "text-muted-foreground"
+                                                    )}
+                                                >
+                                                    {startDate ? format(startDate, 'PPP') : <span>Pick a date</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                                className="w-auto p-0"
+                                                align="start"
+                                                side="bottom"
+                                                sideOffset={4}
+                                                style={calendarPopoverStyle}
+                                            >
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={startDate}
+                                                    onSelect={(date) => {
+                                                        setStartDate(date);
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            start_date: date?.toISOString().split('T')[0]
+                                                        }));
+                                                        setIsStartDatePopoverOpen(false);
+                                                    }}
+                                                    initialFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    ) : (
+                                        startDate ? format(startDate, 'PPP') : 'No start date'
+                                    )
                                 }
                             />
                         </div>

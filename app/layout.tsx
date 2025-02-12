@@ -8,6 +8,7 @@ import { SWRConfig } from "swr";
 import { SidebarStateProvider } from "@/components/sidebar/sidebar-state-provider";
 import { Analytics } from "@vercel/analytics/react"
 import { SpeedInsights } from "@vercel/speed-insights/next"
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

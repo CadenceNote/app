@@ -110,7 +110,6 @@ export function CreateMeetingModal({ open, onClose, teamId }: CreateMeetingModal
                 participant_ids: formData.participant_ids
             };
 
-            console.log('Creating meeting with payload:', payload);
 
             const response = await meetingApi.createMeeting(teamId, payload);
 

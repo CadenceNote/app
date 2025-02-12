@@ -23,19 +23,14 @@ export function useMeeting(teamId?: number, meetingId?: number) {
     } = useSWR<Meeting[]>(
         teams?.length ? (teamId ? meetingKeys.teamMeetings(teamId) : meetingKeys.allTeams()) : null,
         async () => {
-            console.log('[useMeeting] Starting data fetch', { teamId });
             if (!teamId) {
-                console.log('[useMeeting] Fetching meetings for all teams', teams);
                 const allMeetings = await Promise.all(
                     teams.map(team => meetingApi.listMeetings(team.id))
                 );
                 const flattened = allMeetings.flat();
-                console.log('[useMeeting] Fetched meetings for all teams', { count: flattened.length });
                 return flattened;
             }
-            console.log('[useMeeting] Fetching meetings for single team', { teamId });
             const meetings = await meetingApi.listMeetings(teamId);
-            console.log('[useMeeting] Fetched meetings for single team', { count: meetings.length });
             return meetings;
         },
         {

@@ -37,7 +37,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { mutate } from 'swr';
 
 interface Team {
     id: number;
@@ -55,12 +54,30 @@ export default function PTask({ searchTerm }: PTaskProps) {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | undefined>();
     const [activeTab, setActiveTab] = useState("assigned");
-    const { toast } = useToast();
 
     // Use task hook with selected team
     const { tasks, createTask, updateTask } = useTask(
         selectedTeamId === "all" ? undefined : Number(selectedTeamId)
     );
+
+    const handleTaskCreate = async (data: any) => {
+        if (selectedTeamId === "all") {
+            throw new Error("Please select a team to create a task");
+        }
+        const newTask = await createTask({
+            ...data,
+            team: Number(selectedTeamId)
+        });
+        setIsCreateModalOpen(false);
+        return newTask;
+    };
+
+    const handleTaskUpdate = async (taskId: string, data: any) => {
+        if (selectedTeamId === "all") {
+            throw new Error("Please select a team to update a task");
+        }
+        return await updateTask(taskId, data);
+    };
 
     // Filter tasks based on user's role
     const filteredTasks = tasks?.filter(task => {
@@ -69,23 +86,6 @@ export default function PTask({ searchTerm }: PTaskProps) {
             : task.watchers.some(watcher => watcher.id === user?.id);
         return roleMatch;
     }) || [];
-
-    const handleTaskUpdate = async (updatedTask: Task) => {
-        try {
-            await updateTask(updatedTask.id, updatedTask);
-            toast({
-                title: "Success",
-                description: "Task updated successfully"
-            });
-        } catch (error) {
-            console.error('Error updating task:', error);
-            toast({
-                title: "Error",
-                description: "Failed to update task",
-                variant: "destructive"
-            });
-        }
-    };
 
     if (!teams?.length) {
         return (
@@ -179,10 +179,7 @@ export default function PTask({ searchTerm }: PTaskProps) {
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 teamId={Number(selectedTeamId)}
-                onTaskCreate={async (newTask) => {
-                    await createTask(newTask);
-                    setIsCreateModalOpen(false);
-                }}
+                onTaskCreate={handleTaskCreate}
             />
 
             {selectedTask && (

@@ -8,7 +8,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { userApi } from "@/services/userApi";
+import { useTeamUsers } from "@/hooks/useUser";
 import { UserAvatar } from "./UserAvatar";
 
 interface User {
@@ -27,26 +27,7 @@ interface UserComboboxProps {
 
 export function UserCombobox({ teamId, selectedUsers, onSelectionChange, placeholder }: UserComboboxProps) {
     const [open, setOpen] = React.useState(false);
-    const [users, setUsers] = React.useState<User[]>([]);
-    const [loading, setLoading] = React.useState(false);
-
-    React.useEffect(() => {
-        const loadUsers = async () => {
-            if (teamId) {
-                setLoading(true);
-                try {
-                    const teamUsers = await userApi.getTeamUsers(teamId);
-                    setUsers(teamUsers);
-                } catch (error) {
-                    console.error('Failed to load team users:', error);
-                } finally {
-                    setLoading(false);
-                }
-            }
-        };
-
-        loadUsers();
-    }, [teamId]);
+    const { users, isLoading } = useTeamUsers(teamId);
 
     const selectedUserObjects = users.filter(user => selectedUsers.includes(user.id));
 
@@ -64,16 +45,17 @@ export function UserCombobox({ teamId, selectedUsers, onSelectionChange, placeho
 
     return (
         <div className="space-y-2">
-            <Popover open={open} onOpenChange={setOpen} >
+            <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
                     <Button
                         variant="outline"
                         role="combobox"
                         aria-expanded={open}
-                        className="w-full justify-between "
+                        className="w-full justify-between"
+                        disabled={isLoading}
                     >
                         {selectedUsers.length === 0 ? (
-                            <span className="text-muted-foreground">{placeholder || "Select users..."}</span>
+                            <span className="text-muted-foreground">{isLoading ? "Loading..." : placeholder || "Select users..."}</span>
                         ) : (
                             <span>{selectedUsers.length} selected</span>
                         )}

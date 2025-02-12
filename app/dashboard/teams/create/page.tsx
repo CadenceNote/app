@@ -63,7 +63,7 @@ export default function CreateTeamPage() {
         try {
             setIsLoading(true);
 
-            const result = await createTeam.mutateAsync({
+            const result = await createTeam({
                 name: formData.name.trim(),
                 description: formData.description.trim(),
                 userId: user?.id as string

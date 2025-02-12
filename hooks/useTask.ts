@@ -23,19 +23,14 @@ export function useTask(teamId?: number, taskId?: string) {
     } = useSWR<Task[], Error>(
         teams?.length ? taskKeys.teamTasks(teamId) : null,
         async () => {
-            console.log('[useTask] Starting data fetch', { teamId });
             if (!teamId) {
-                console.log('[useTask] Fetching tasks for all teams', teams);
                 const allTasks = await Promise.all(
                     teams.map(team => taskApi.listTasks(team.id))
                 );
                 const flattened = allTasks.flat();
-                console.log('[useTask] Fetched tasks for all teams', { count: flattened.length });
                 return flattened;
             }
-            console.log('[useTask] Fetching tasks for single team', { teamId });
             const tasks = await taskApi.listTasks(teamId);
-            console.log('[useTask] Fetched tasks for single team', { count: tasks.length });
             return tasks;
         },
         {
@@ -150,13 +145,44 @@ export function useTask(teamId?: number, taskId?: string) {
     // Update task
     const updateTask = async (taskId: string, data: Partial<CreateTaskInput>) => {
         return handleMutation({
-            operation: () => taskApi.updateTask(teamId!, parseInt(taskId), {
-                ...data,
-                assignee_ids: data.assignees?.map(a => a.id.toString()) || undefined,
-            }),
+            operation: () => {
+                // Get current task data
+                const currentTask = tasks?.find(t => t.id === taskId);
+                if (!currentTask) {
+                    throw new Error("Task not found");
+                }
+
+                // Compare current and new assignees to determine changes
+                const currentAssigneeIds = new Set(currentTask.assignees.map(a => a.id));
+                const newAssigneeIds = new Set(data.assignees?.map(a =>
+                    typeof a === 'string' ? a : a.id
+                ));
+
+                // Only include assignee_ids if they've actually changed
+                const assigneeIdsChanged =
+                    currentAssigneeIds.size !== newAssigneeIds.size ||
+                    ![...currentAssigneeIds].every(id => newAssigneeIds.has(id));
+
+                return taskApi.updateTask(teamId!, parseInt(taskId), {
+                    ...data,
+                    assignee_ids: assigneeIdsChanged ?
+                        [...newAssigneeIds].filter(id => id !== '') :
+                        undefined
+                });
+            },
             optimisticUpdate: (current) =>
                 current.map(t =>
-                    t.id === taskId ? { ...t, ...data } : t
+                    t.id === taskId ? {
+                        ...t,
+                        ...data,
+                        assignees: data.assignees?.map(a => {
+                            if (typeof a === 'string') {
+                                const existingAssignee = t.assignees.find(existing => existing.id === a);
+                                return existingAssignee || { id: a, email: '', full_name: '' };
+                            }
+                            return a;
+                        }) || t.assignees
+                    } : t
                 ),
         });
     };
@@ -167,6 +193,79 @@ export function useTask(teamId?: number, taskId?: string) {
             operation: () => taskApi.deleteTask(teamId!, parseInt(taskId)),
             optimisticUpdate: (current) =>
                 current.filter(t => t.id !== taskId),
+        });
+    };
+
+    // Add comment mutation
+    const addComment = async (content: string, parentId?: number) => {
+        if (!teamId || !taskId) return null;
+        return handleMutation({
+            operation: async () => {
+                const newComment = await taskApi.addComment(teamId, parseInt(taskId), content, parentId);
+                return newComment;
+            },
+            optimisticUpdate: (current) => {
+                if (!task) return current;
+                return current.map(t => {
+                    if (t.id === taskId) {
+                        return {
+                            ...t,
+                            comments: [...(t.comments || []), {
+                                id: Date.now(),
+                                content,
+                                parent_id: parentId,
+                                created_at: new Date().toISOString(),
+                                user: task.created_by!
+                            }]
+                        };
+                    }
+                    return t;
+                });
+            }
+        });
+    };
+
+    // Delete comment mutation
+    const deleteComment = async (commentId: number) => {
+        if (!teamId || !taskId) return null;
+        return handleMutation({
+            operation: async () => {
+                await taskApi.deleteComment(teamId, parseInt(taskId), commentId);
+                return commentId;
+            },
+            optimisticUpdate: (current) => {
+                return current.map(t => {
+                    if (t.id === taskId) {
+                        return {
+                            ...t,
+                            comments: t.comments?.filter(c => c.id !== commentId) || []
+                        };
+                    }
+                    return t;
+                });
+            }
+        });
+    };
+
+    // Toggle watch mutation
+    const toggleWatch = async () => {
+        if (!teamId || !taskId) return null;
+        return handleMutation({
+            operation: async () => {
+                const updatedTask = await taskApi.toggleWatch(teamId, parseInt(taskId));
+                return updatedTask;
+            },
+            optimisticUpdate: (current) => {
+                return current.map(t => {
+                    if (t.id === taskId) {
+                        return {
+                            ...t,
+                            is_watching: !t.is_watching
+                        };
+                    }
+                    return t;
+                });
+            }
         });
     };
 
@@ -187,6 +286,9 @@ export function useTask(teamId?: number, taskId?: string) {
         createTask,
         updateTask,
         deleteTask,
+        addComment,
+        deleteComment,
+        toggleWatch,
 
         // Mutation helpers
         mutateTasks,

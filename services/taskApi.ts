@@ -113,7 +113,6 @@ const normalizeStatus = (status: string): TaskStatus => {
 export const taskApi = {
     // List tasks with filters
     listTasks: async (teamId: number): Promise<Task[]> => {
-        console.log('Listing tasks for team:', teamId);
         const { data: tasks, error } = await supabase
             .from('tasks')
             .select(`
@@ -172,7 +171,9 @@ export const taskApi = {
 
     // Get a single task
     getTask: async (teamId: number, taskId: number): Promise<Task> => {
-        console.log('Getting task:', { teamId, taskId });
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
 
         // First get the task data
         const { data: taskData, error: taskError } = await supabase
@@ -228,8 +229,10 @@ export const taskApi = {
             throw commentsError;
         }
 
-        console.log('Raw task data:', taskData);
-        console.log('Raw comments:', comments);
+        // Check if current user is watching this task
+        const isWatching = taskData.task_assignments.some(
+            (ta: any) => ta.role === 'WATCHER' && ta.user_id === user.id
+        );
 
         // Transform the response to match Task interface
         const transformedTask = {
@@ -268,10 +271,10 @@ export const taskApi = {
                     email: c.user.email,
                     full_name: c.user.full_name
                 }
-            })) || []
+            })) || [],
+            is_watching: isWatching // Add the watch status
         };
 
-        console.log('Transformed task:', transformedTask);
         return transformedTask;
     },
 
@@ -279,6 +282,7 @@ export const taskApi = {
     createTask: async (teamId: number, data: CreateTaskInput): Promise<Task> => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('User not authenticated');
+
 
         // First get the next team_ref_number
         const { data: maxRef } = await supabase
@@ -314,6 +318,14 @@ export const taskApi = {
         if (taskError) throw taskError;
         if (!newTask) throw new Error('Failed to create task');
 
+        // Get team members for notifications
+        const { data: teamMembers } = await supabase
+            .from('team_members')
+            .select('user_id')
+            .eq('team_id', teamId);
+
+        const teamMemberIds = teamMembers?.map(member => member.user_id) || [];
+
         // Then create task assignments if any assignees
         if (data.assignees?.length) {
             const assignmentData = data.assignees.map(userId => ({
@@ -343,6 +355,8 @@ export const taskApi = {
 
             if (watcherError) throw watcherError;
         }
+
+
 
         // Fetch the complete task with assignments
         const { data: taskWithAssignments, error: fetchError } = await supabase
@@ -396,7 +410,6 @@ export const taskApi = {
     // Update a task
     updateTask: async (teamId: number, taskId: number, data: Partial<CreateTaskInput>): Promise<Task> => {
         try {
-            console.log('Updating task:', { teamId, taskId, data });
 
             // First update the task's basic information
             const updateData = {
@@ -411,10 +424,7 @@ export const taskApi = {
                 updated_at: new Date().toISOString()
             };
 
-            console.log("Preparing to update with data:", updateData);
-
             // Directly proceed with the update with error handling
-            console.log("Attempting to update task...");
             try {
                 const { data: updatedTaskData, error: updateError } = await supabase
                     .from('tasks')
@@ -424,7 +434,6 @@ export const taskApi = {
                     .select('*')
                     .single();
 
-                console.log("Update attempt completed", { updatedTaskData, updateError });
 
                 if (updateError) {
                     console.error("Error updating task:", updateError);
@@ -437,14 +446,11 @@ export const taskApi = {
                 }
 
                 // If we get here, the update was successful
-                console.log("Task update successful:", updatedTaskData);
 
                 // Handle assignees if provided
                 if (data.assignees && data.assignees.length > 0) {
-                    console.log('Starting assignee update process');
 
                     // Delete existing assignees
-                    console.log("Removing existing assignees...");
                     const { error: deleteError } = await supabase
                         .from('task_assignments')
                         .delete()
@@ -457,29 +463,33 @@ export const taskApi = {
                     }
 
                     // Add new assignees
-                    const assignmentData = data.assignees.map(userId => ({
-                        task_id: taskId,
-                        user_id: userId,
-                        role: 'ASSIGNEE'
-                    }));
+                    const assignmentData = data.assignees.map(userId => {
+                        // If userId is an object with an id field, use that, otherwise use userId directly
+                        const actualUserId = typeof userId === 'object' ? userId.id : userId;
+                        return {
+                            task_id: taskId,
+                            user_id: actualUserId,
+                            role: 'ASSIGNEE'
+                        };
+                    });
 
-                    console.log('Inserting new assignments:', assignmentData);
-                    const { error: assignError } = await supabase
-                        .from('task_assignments')
-                        .insert(assignmentData);
 
-                    if (assignError) {
-                        console.error("Error inserting new assignees:", assignError);
-                        throw new Error(`Failed to insert new assignees: ${assignError.message}`);
+                    // Insert assignments one by one to better handle errors
+                    for (const assignment of assignmentData) {
+                        const { error: assignError } = await supabase
+                            .from('task_assignments')
+                            .insert(assignment);
+
+                        if (assignError) {
+                            console.error("Error inserting assignee:", assignError);
+                            throw new Error(`Failed to insert assignee: ${assignError.message}`);
+                        }
                     }
 
-                    console.log("Assignee update completed successfully");
                 }
 
                 // Fetch the final task data with all relations
-                console.log("Fetching final task data...");
                 const finalTask = await taskApi.getTask(teamId, taskId);
-                console.log("Final task data fetched successfully");
 
 
                 return finalTask;
@@ -695,7 +705,6 @@ export const taskApi = {
 
     // Reorder tasks within a quadrant
     reorderTasksInQuadrant: async (quadrant: TaskQuadrant, taskIds: number[]): Promise<void> => {
-        console.log('Reordering tasks:', { quadrant, taskIds });
 
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
@@ -708,7 +717,6 @@ export const taskApi = {
 
         // Update all tasks in the quadrant with their new order
         const updates = taskIds.map((taskId, index) => {
-            console.log('Creating update for taskId:', taskId, 'index:', index);
             return {
                 task_id: taskId,
                 user_id: user.id,
@@ -717,7 +725,6 @@ export const taskApi = {
             };
         });
 
-        console.log('Updates to be applied:', updates);
 
         const { error } = await supabase
             .from('personal_task_preferences')
@@ -730,37 +737,93 @@ export const taskApi = {
             throw error;
         }
 
-        console.log('Reorder completed successfully');
     },
 
     // Add watcher to a task
-    addWatcher: async (teamId: number, taskId: number, userId: string): Promise<Task> => {
+    addWatcher: async (teamId: number, taskId: number, userId: string): Promise<void> => {
         const { error } = await supabase
             .from('task_assignments')
             .insert({
                 task_id: taskId,
-                user_id: userId, // Use supabase_uid directly
+                user_id: userId,
                 role: 'WATCHER'
             });
 
         if (error) throw error;
-
-        // Fetch and return updated task
-        return taskApi.getTask(teamId, taskId);
     },
 
     // Remove watcher from a task
-    removeWatcher: async (teamId: number, taskId: number, userId: string): Promise<Task> => {
+    removeWatcher: async (teamId: number, taskId: number, userId: string): Promise<void> => {
         const { error } = await supabase
             .from('task_assignments')
             .delete()
             .eq('task_id', taskId)
-            .eq('user_id', userId) // Use supabase_uid directly
+            .eq('user_id', userId)
             .eq('role', 'WATCHER');
 
         if (error) throw error;
+    },
 
-        // Fetch and return updated task
-        return taskApi.getTask(teamId, taskId);
+    // Toggle watch status for current user
+    toggleWatch: async (teamId: number, taskId: number): Promise<Task> => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        // Cast taskId to integer and ensure it's valid
+        const taskIdInt = parseInt(String(taskId));
+        if (isNaN(taskIdInt)) {
+            throw new Error('Invalid task ID');
+        }
+
+        try {
+            // Check if user is already watching
+            const { data: existingWatch, error: watchError } = await supabase
+                .from('task_assignments')
+                .select('*')
+                .eq('task_id', taskIdInt)
+                .eq('user_id', user.id)
+                .eq('role', 'WATCHER')
+                .maybeSingle();
+
+            if (watchError) {
+                console.error('Error checking watch status:', watchError);
+                throw watchError;
+            }
+
+            if (existingWatch) {
+                // Remove watcher
+                const { error: removeError } = await supabase
+                    .from('task_assignments')
+                    .delete()
+                    .eq('task_id', taskIdInt)
+                    .eq('user_id', user.id)
+                    .eq('role', 'WATCHER');
+
+                if (removeError) {
+                    console.error('Error removing watcher:', removeError);
+                    throw removeError;
+                }
+            } else {
+                // Add watcher
+                const { error: addError } = await supabase
+                    .from('task_assignments')
+                    .insert({
+                        task_id: taskIdInt,
+                        user_id: user.id,
+                        role: 'WATCHER'
+                    });
+
+                if (addError) {
+                    console.error('Error adding watcher:', addError);
+                    throw addError;
+                }
+            }
+
+            // Fetch and return updated task
+            return await taskApi.getTask(teamId, taskIdInt);
+        } catch (error) {
+            console.error('Error toggling watch status:', error);
+            throw error;
+        }
     }
 }; 

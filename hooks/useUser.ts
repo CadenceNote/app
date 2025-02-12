@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 import { supabase } from '@/lib/supabase';
+import { userApi } from '@/services/userApi';
 
 interface User {
     id: string;
@@ -77,5 +78,26 @@ export function useUser() {
         user: data,
         isLoading,
         error: error as Error | null,
+    };
+}
+
+export function useTeamUsers(teamId?: number) {
+    const { data: users = [], error, isLoading } = useSWR(
+        teamId ? ['team-users', teamId] : null,
+        async () => {
+            if (!teamId) return [];
+            return userApi.getTeamUsers(teamId);
+        },
+        {
+            revalidateOnFocus: true,
+            revalidateOnReconnect: true,
+            dedupingInterval: 5000,
+        }
+    );
+
+    return {
+        users,
+        error,
+        isLoading,
     };
 }

@@ -29,6 +29,9 @@ import {
 } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import useSWRMutation from 'swr/mutation';
+import { taskKeys } from '@/hooks/useTask';
+import { mutate } from 'swr';
 
 interface CreateTaskModalProps {
     isOpen: boolean;
@@ -51,8 +54,69 @@ export function CreateTaskModal({ isOpen, onClose, teamId, onTaskCreate }: Creat
     const [assignees, setAssignees] = useState<string[]>([]);
     const [startDate, setStartDate] = useState<Date>();
     const [dueDate, setDueDate] = useState<Date>();
-    const [isLoading, setIsLoading] = useState(false);
     const { toast } = useToast();
+
+    // Add task creation mutation
+    const { trigger: createTaskMutation, isMutating } = useSWRMutation(
+        taskKeys.teamTasks(teamId),
+        async () => {
+            const newTask = await taskApi.createTask(teamId, {
+                title,
+                description,
+                status,
+                priority,
+                type,
+                assignees: assignees.map(userId => userId),
+                start_date: startDate?.toISOString(),
+                due_date: dueDate?.toISOString(),
+            });
+
+            // Update caches optimistically
+            await Promise.all([
+                mutate(
+                    taskKeys.teamTasks(teamId),
+                    async (tasks: Task[] = []) => {
+                        return [newTask, ...tasks];
+                    },
+                    { revalidate: false }
+                ),
+                mutate(
+                    taskKeys.allTeams(),
+                    async (tasks: Task[] = []) => {
+                        return [newTask, ...tasks];
+                    },
+                    { revalidate: false }
+                )
+            ]);
+
+            return newTask;
+        },
+        {
+            revalidate: false,
+            populateCache: true,
+            throwOnError: true,
+            onSuccess: () => {
+                // Reset form
+                setTitle("");
+                setDescription("");
+                setStatus(TaskStatus.TODO);
+                setPriority(TaskPriority.MEDIUM);
+                setType(TaskType.TASK);
+                setAssignees([]);
+                setStartDate(undefined);
+                setDueDate(undefined);
+
+                // Close modal
+                onClose();
+
+                // Show success message
+                toast({
+                    title: "Success",
+                    description: "Task created successfully",
+                });
+            }
+        }
+    );
 
     const handleSubmit = async () => {
         if (!title.trim()) {
@@ -64,32 +128,15 @@ export function CreateTaskModal({ isOpen, onClose, teamId, onTaskCreate }: Creat
             return;
         }
 
-        setIsLoading(true);
         try {
-            const newTask = await taskApi.createTask(teamId, {
-                title,
-                description,
-                status,
-                priority,
-                type,
-                assignees,
-                start_date: startDate?.toISOString(),
-                due_date: dueDate?.toISOString(),
-            });
-            console.log("CREATING", newTask);
-            onTaskCreate(newTask);
-            toast({
-                title: "Success",
-                description: "Task created successfully",
-            });
-        } catch (error: any) {
+            await createTaskMutation();
+        } catch (error: unknown) {
+            console.error("Error creating task:", error);
             toast({
                 title: "Error",
-                description: error.message || "Failed to create task",
+                description: error instanceof Error ? error.message : "Failed to create task",
                 variant: "destructive"
             });
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -229,8 +276,8 @@ export function CreateTaskModal({ isOpen, onClose, teamId, onTaskCreate }: Creat
                         <Button variant="outline" onClick={onClose}>
                             Cancel
                         </Button>
-                        <Button onClick={handleSubmit} disabled={isLoading}>
-                            {isLoading ? (
+                        <Button onClick={handleSubmit} disabled={isMutating}>
+                            {isMutating ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                                 'Create Task'

@@ -16,7 +16,6 @@ import { useUser } from '@/hooks/useUser';
 import { useToast } from "@/hooks/use-toast"
 
 export default function DashboardPage() {
-    console.log('[DashboardPage] Rendering');
     const [searchTerm, setSearchTerm] = useState("")
     const [activeSection, setActiveSection] = useState('summary-section')
     const [date, setDate] = useState<Date>(new Date())
@@ -25,11 +24,9 @@ export default function DashboardPage() {
     // Use our hooks
     const { user } = useUser();
     const { teams, isLoading: isLoadingTeams } = useTeams();
-    console.log('[DashboardPage] Teams data:', { teams, isLoadingTeams });
 
     // Use task hook for all teams initially
     const { tasks, tasksError, isLoadingTasks } = useTask();
-    console.log('[DashboardPage] Tasks data:', { count: tasks?.length, isLoadingTasks });
 
     // Use meeting hook for all teams initially
     const {
@@ -37,14 +34,8 @@ export default function DashboardPage() {
         meetingsError,
         isLoadingMeetings
     } = useMeeting();
-    console.log('[DashboardPage] Meetings data:', { count: meetings?.length, isLoadingMeetings });
 
     useEffect(() => {
-        console.log('[DashboardPage] Data dependencies changed:', {
-            teamsLoaded: Boolean(teams),
-            tasksLoaded: Boolean(tasks),
-            meetingsLoaded: Boolean(meetings)
-        });
         if (tasksError) {
             toast({
                 title: "Error",

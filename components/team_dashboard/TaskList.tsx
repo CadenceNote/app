@@ -35,7 +35,7 @@ export function TaskList({ tasks, onTaskSelect }: TaskListProps) {
                 <TableBody>
                     {tasks.map((task) => (
                         <TableRow
-                            key={task.id}
+                            key={`${task.id}-${task.team_id}`}
                             className="cursor-pointer hover:bg-accent/50"
                             onClick={() => onTaskSelect(task)}
                         >
@@ -46,7 +46,7 @@ export function TaskList({ tasks, onTaskSelect }: TaskListProps) {
                             <TableCell>
                                 <div className="flex -space-x-2">
                                     {task.assignees.map((assignee, index) => (
-                                        <TooltipProvider key={assignee.id}>
+                                        <TooltipProvider key={`${assignee.id}-${index}`}>
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
                                                     <div className={cn(
@@ -54,14 +54,14 @@ export function TaskList({ tasks, onTaskSelect }: TaskListProps) {
                                                         index > 0 && "-ml-2"
                                                     )}>
                                                         <UserAvatar
-                                                            name={assignee.full_name || assignee.email}
+                                                            name={assignee.full_name || assignee.email || 'Unknown User'}
                                                             userId={assignee.id}
                                                             className="h-6 w-6"
                                                         />
                                                     </div>
                                                 </TooltipTrigger>
                                                 <TooltipContent>
-                                                    <p>{assignee.full_name || assignee.email}</p>
+                                                    <p>{assignee.full_name || assignee.email || 'Unknown User'}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         </TooltipProvider>

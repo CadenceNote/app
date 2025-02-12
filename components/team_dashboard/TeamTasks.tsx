@@ -11,33 +11,23 @@ import { CreateTaskModal } from "./CreateTaskModal";
 import { TaskDetail } from "@/components/tasks/TaskDetail";
 
 interface TeamTasksProps {
-    searchTerm: string;
     teamId: number;
 }
 
-export default function TeamTasks({ searchTerm, teamId }: TeamTasksProps) {
+export default function TeamTasks({ teamId }: TeamTasksProps) {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | undefined>();
-    const { toast } = useToast();
 
     // Use task hook with team scope
     const { tasks, createTask, updateTask } = useTask(teamId);
 
-    const handleTaskUpdate = async (updatedTask: Task) => {
-        try {
-            await updateTask(updatedTask.id, updatedTask);
-            toast({
-                title: "Success",
-                description: "Task updated successfully"
-            });
-        } catch (error) {
-            console.error('Error updating task:', error);
-            toast({
-                title: "Error",
-                description: "Failed to update task",
-                variant: "destructive"
-            });
-        }
+    const handleTaskCreate = async (data: any) => {
+        const newTask = await createTask({
+            ...data,
+            team: teamId
+        });
+        setIsCreateModalOpen(false);
+        return newTask;
     };
 
     return (
@@ -68,10 +58,7 @@ export default function TeamTasks({ searchTerm, teamId }: TeamTasksProps) {
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 teamId={teamId}
-                onTaskCreate={async (newTask) => {
-                    await createTask(newTask);
-                    setIsCreateModalOpen(false);
-                }}
+                onTaskCreate={handleTaskCreate}
             />
 
             {selectedTask && (
@@ -79,8 +66,8 @@ export default function TeamTasks({ searchTerm, teamId }: TeamTasksProps) {
                     isOpen={!!selectedTask}
                     onClose={() => setSelectedTask(undefined)}
                     task={selectedTask}
-                    teamId={selectedTask.team_id}
-                    onTaskUpdate={handleTaskUpdate}
+                    teamId={teamId}
+                    onTaskUpdate={updateTask}
                 />
             )}
         </div>

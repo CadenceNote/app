@@ -21,6 +21,7 @@ import { useTeams } from '@/hooks/useTeams';
 import { useMeeting } from '@/hooks/useMeeting';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from "@/hooks/use-toast"
+import { NotificationBell } from "@/components/notifications/NotificationBell"
 
 export default function TeamDashboardPage() {
     const params = useParams();
@@ -37,7 +38,6 @@ export default function TeamDashboardPage() {
 
     // Use task hook for specific team
     const { tasks, tasksError, isLoadingTasks } = useTask(teamId);
-    console.log('[TeamDashboardPage] Tasks data:', { count: tasks?.length, isLoadingTasks });
 
     // Use meeting hook for specific team
     const {
@@ -45,7 +45,6 @@ export default function TeamDashboardPage() {
         meetingsError,
         isLoadingMeetings
     } = useMeeting(teamId);
-    console.log('[TeamDashboardPage] Meetings data:', { count: meetings?.length, isLoadingMeetings });
 
     useEffect(() => {
         if (tasksError) {
