@@ -25,11 +25,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUser } from "@/hooks/useUser";
 import { useTask } from "@/hooks/useTask";
 import { useTeams } from "@/hooks/useTeams";
-import { TaskList } from "./TaskList";
+import { TaskList } from "@/components/tasks/TaskList";
 import { PlusCircle, Eye } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TeamSelectModal } from "./TeamSelectModal";
-import { CreateTaskModal } from "./CreateTaskModal";
+import { CreateTaskModal } from "../team_dashboard/CreateTaskModal";
 import {
     Select,
     SelectContent,
@@ -56,7 +56,7 @@ export default function PTask({ searchTerm }: PTaskProps) {
     const [activeTab, setActiveTab] = useState("assigned");
 
     // Use task hook - it will handle both all teams and single team cases
-    const { tasks, createTask, updateTask } = useTask(
+    const { tasks, isLoadingTasks, createTask, updateTask } = useTask(
         selectedTeamId === "all" ? undefined : Number(selectedTeamId)
     );
 
@@ -137,10 +137,16 @@ export default function PTask({ searchTerm }: PTaskProps) {
 
                 <TabsContent value="assigned">
                     <Card className="p-6">
-                        {filteredTasks.length > 0 ? (
+                        {isLoadingTasks ? (
+                            <div className="flex items-center justify-center py-8">
+                                Loading tasks...
+                            </div>
+                        ) : filteredTasks.length > 0 ? (
                             <TaskList
                                 tasks={filteredTasks}
                                 onTaskSelect={setSelectedTask}
+                                teamId={selectedTeamId === "all" ? undefined : Number(selectedTeamId)}
+                                isLoading={isLoadingTasks}
                             />
                         ) : (
                             <EmptyState
@@ -153,10 +159,16 @@ export default function PTask({ searchTerm }: PTaskProps) {
 
                 <TabsContent value="watching">
                     <Card className="p-6">
-                        {filteredTasks.length > 0 ? (
+                        {isLoadingTasks ? (
+                            <div className="flex items-center justify-center py-8">
+                                Loading tasks...
+                            </div>
+                        ) : filteredTasks.length > 0 ? (
                             <TaskList
                                 tasks={filteredTasks}
                                 onTaskSelect={setSelectedTask}
+                                teamId={selectedTeamId === "all" ? undefined : Number(selectedTeamId)}
+                                isLoading={isLoadingTasks}
                             />
                         ) : (
                             <EmptyState

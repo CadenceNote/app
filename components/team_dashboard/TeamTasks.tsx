@@ -2,9 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Task } from "@/lib/types/task";
-import { useToast } from "@/hooks/use-toast";
 import { useTask } from "@/hooks/useTask";
-import { TaskList } from "./TaskList";
+import { TaskList } from "@/components/tasks/TaskList";
 import { PlusCircle } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { CreateTaskModal } from "./CreateTaskModal";
@@ -19,7 +18,7 @@ export default function TeamTasks({ teamId }: TeamTasksProps) {
     const [selectedTask, setSelectedTask] = useState<Task | undefined>();
 
     // Use task hook with team scope
-    const { tasks, createTask, updateTask } = useTask(teamId);
+    const { tasks, isLoadingTasks, createTask, updateTask } = useTask(teamId);
 
     const handleTaskCreate = async (data: any) => {
         const newTask = await createTask({
@@ -41,10 +40,15 @@ export default function TeamTasks({ teamId }: TeamTasksProps) {
             </div>
 
             <Card className="p-6">
-                {tasks && tasks.length > 0 ? (
+                {isLoadingTasks ? (
+                    <div className="flex items-center justify-center py-8">
+                        Loading tasks...
+                    </div>
+                ) : tasks && tasks.length > 0 ? (
                     <TaskList
                         tasks={tasks}
                         onTaskSelect={setSelectedTask}
+                        teamId={teamId}
                     />
                 ) : (
                     <EmptyState

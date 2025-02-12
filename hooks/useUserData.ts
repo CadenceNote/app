@@ -50,8 +50,6 @@ export function useUserData(userId: string | undefined) {
         }
     );
 
-    console.log(userData);
-
     return {
         userData,
         isLoading,

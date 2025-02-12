@@ -169,8 +169,17 @@ export function useTask(teamId?: number, taskId?: string) {
 
     // Delete task
     const deleteTask = async (taskId: string) => {
+        // Find the task to get its team_id if we're in "all teams" view
+        const taskToDelete = tasks.find(t => t.id === taskId);
+        if (!taskToDelete) {
+            throw new Error('Task not found');
+        }
+
+        // Use the task's own team_id if we're in "all teams" view
+        const effectiveTeamId = teamId || taskToDelete.team_id;
+
         return handleMutation({
-            operation: () => taskApi.deleteTask(teamId!, parseInt(taskId)),
+            operation: () => taskApi.deleteTask(effectiveTeamId, parseInt(taskId)),
             optimisticUpdate: (current) =>
                 current.filter(t => t.id !== taskId),
         });
