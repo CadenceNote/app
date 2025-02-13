@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Home, Settings, LucideIcon, Building2 } from "lucide-react"
+import { Home, Settings, LucideIcon, Building2, Clock, CheckSquare } from "lucide-react"
 import { usePathname } from 'next/navigation';
 import { NavMain } from "@/components/sidebar/nav-main"
 import { NavUser } from "@/components/sidebar/nav-user"
@@ -25,6 +25,16 @@ const personalItems = [
     title: "My Dashboard",
     url: "/dashboard",
     icon: Home,
+  },
+  {
+    title: "Time Tracking",
+    url: "/dashboard/time-tracking",
+    icon: Clock,
+  },
+  {
+    title: "Checklists",
+    url: "/dashboard/checklists",
+    icon: CheckSquare,
   }
 ];
 

@@ -2,6 +2,9 @@ import { Button } from "@/components/ui/button"
 import { CalendarIcon, CheckCircle, Settings, BarChart2, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { useUser } from "@/hooks/useUser"
+import { useTeams } from "@/hooks/useTeams"
 
 interface TeamSidebarProps {
     activeSection: string;
@@ -9,22 +12,22 @@ interface TeamSidebarProps {
     teamId: number;
 }
 
-
-
 export default function TeamSidebar({ activeSection, setActiveSection, teamId }: TeamSidebarProps) {
     const router = useRouter()
+    const { user } = useUser()
+    const { teams } = useTeams()
+    const currentTeam = teams?.find(t => t.id === teamId)
 
     const navigateToSettings = () => {
         router.push(`/dashboard/${teamId}/settings`)
     }
-
 
     return (
         <aside className="w-64 bg-card text-card-foreground border-r border-border/40 backdrop-blur-sm fixed h-screen overflow-y-auto">
             <div className="p-6">
                 <div className="flex items-center gap-2 mb-8">
                     <h2 className="text-lg font-semibold bg-gradient-to-r from-green-600 to-indigo-600 bg-clip-text text-transparent">
-                        Team Dashboard
+                        {currentTeam?.name || 'Team Dashboard'}
                     </h2>
                 </div>
                 <nav className="space-y-1">
@@ -126,10 +129,7 @@ export default function TeamSidebar({ activeSection, setActiveSection, teamId }:
                         <Button
                             variant="ghost"
                             className="w-full justify-start opacity-70 hover:opacity-100"
-                            onClick={() => {
-                                navigateToSettings()
-                                setActiveSection('settings-section')
-                            }}
+                            onClick={navigateToSettings}
                         >
                             <div className="flex items-center gap-3">
                                 <Settings className="h-4 w-4 text-muted-foreground" />

@@ -67,7 +67,7 @@ export default function AIAssistant() {
             <CardHeader>
                 <div className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5" />
-                    <CardTitle>Agilee AI </CardTitle>
+                    <CardTitle>AI Assistant</CardTitle>
                 </div>
                 <CardDescription>Get personalized insights and recommendations for your work.</CardDescription>
             </CardHeader>

@@ -6,9 +6,7 @@
 */
 "use client"
 
-import { useEffect, useState, Suspense } from "react"
-import { useParams } from "next/navigation"
-import TeamSidebar from "@/components/team_dashboard/TeamSidebar"
+import { use } from "react"
 import TeamAIAssistant from "@/components/team_dashboard/TeamAIAssistant"
 import TeamStats from "@/components/team_dashboard/TeamStats"
 import TeamAlerts from "@/components/team_dashboard/TeamAlerts"
@@ -16,114 +14,52 @@ import TeamEvents from "@/components/team_dashboard/TeamEvents"
 import TeamTasks from "@/components/team_dashboard/TeamTasks"
 import TeamMeetings from "@/components/team_dashboard/TeamMeetings"
 import TeamHeader from "@/components/team_dashboard/TeamHeader"
-import { useTask } from '@/hooks/useTask';
-import { useTeams } from '@/hooks/useTeams';
-import { useMeeting } from '@/hooks/useMeeting';
-import { useUser } from '@/hooks/useUser';
-import { useToast } from "@/hooks/use-toast"
+import { useState } from "react"
 
-export default function TeamDashboardPage() {
-    const params = useParams();
-    const teamId = parseInt(params.teamId as string);
-    const [searchTerm, setSearchTerm] = useState("")
-    const [activeSection, setActiveSection] = useState('summary-section')
-    const [date, setDate] = useState<Date>(new Date())
-    const { toast } = useToast()
-
-    // Use our hooks with team scope
-    const { user } = useUser();
-    const { teams, isLoading: isLoadingTeams } = useTeams();
-    const currentTeam = teams?.find(t => t.id === teamId);
-
-    // Use task hook for specific team
-    const { tasks, tasksError, isLoadingTasks } = useTask(teamId);
-
-    // Use meeting hook for specific team
-    const {
-        meetings,
-        meetingsError,
-        isLoadingMeetings
-    } = useMeeting(teamId);
-
-    useEffect(() => {
-        if (tasksError) {
-            toast({
-                title: "Error",
-                description: "Failed to fetch team tasks",
-                variant: "destructive"
-            });
-        }
-        if (meetingsError) {
-            toast({
-                title: "Error",
-                description: "Failed to fetch team meetings",
-                variant: "destructive"
-            });
-        }
-    }, [tasksError, meetingsError, toast]);
-
-    // Don't render content until data is loaded
-    if (isLoadingTeams || isLoadingTasks || isLoadingMeetings) {
-        return <div className="flex h-screen items-center justify-center">Loading team dashboard...</div>;
-    }
-
-    if (!currentTeam) {
-        return <div className="flex h-screen items-center justify-center">Team not found</div>;
-    }
+export default function TeamDashboard({ params }: { params: Promise<{ teamId: string }> }) {
+    const resolvedParams = use(params);
+    const teamId = parseInt(resolvedParams.teamId);
+    const [date, setDate] = useState<Date>();
+    const [searchTerm, setSearchTerm] = useState("");
 
     return (
-        <div className="flex h-screen">
-            {/* Sidebar */}
-            <TeamSidebar activeSection={activeSection} setActiveSection={setActiveSection} teamId={teamId} />
-            {/* Main Content */}
-            <main className="flex-1 overflow-y-auto ml-64 ">
-                <TeamHeader searchTerm={searchTerm} setSearchTerm={setSearchTerm} teamId={teamId} />
+        <div className="h-full flex flex-col">
+            <TeamHeader
+                teamId={teamId}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+            />
 
-                <Suspense fallback={<div>Loading...</div>}>
-                    {/* Dashboard Content */}
-                    <div className="min-h-screen  max-w-7xl mx-auto">
-                        {/* Summary Section */}
-                        <section id="summary-section" className="min-h-screen p-6 space-y-6 pt-24">
-                            {/* AI Assistant */}
-                            <TeamAIAssistant teamId={teamId} />
+            <div className="flex-1 container mx-auto py-6 space-y-8">
+                {/* Stats Row */}
+                <TeamStats teamId={teamId} />
 
-                            {/* Stats */}
-                            <TeamStats
-                                tasks={tasks || []}
-                                meetings={meetings || []}
-                                team={currentTeam}
-                            />
+                {/* Main Content Grid */}
+                <div className="grid lg:grid-cols-3 gap-6">
+                    {/* Main Content - First Two Columns */}
+                    <div className="lg:col-span-2 space-y-6">
+                        <TeamAIAssistant teamId={teamId} />
 
-                            {/* Alerts */}
-                            <TeamAlerts teamId={teamId} />
-                        </section>
+                        <div className="border rounded-lg bg-white/70 backdrop-blur-sm">
+                            <TeamTasks searchTerm={searchTerm} teamId={teamId} />
+                        </div>
 
-                        {/* Calendar Section */}
-                        <section id="calendar-section" className="min-h-screen p-6 space-y-6 pt-24">
-                            <TeamEvents
-                                meetings={meetings || []}
-                                tasks={tasks || []}
-                                date={date}
-                                setDate={setDate}
-                                teamId={teamId}
-                            />
-                        </section>
-
-                        {/* Tasks Section */}
-                        <section id="tasks-section" className="min-h-screen p-6 space-y-6  pt-24">
-                            <TeamTasks
-                                searchTerm={searchTerm}
-                                teamId={teamId}
-                            />
-                        </section>
-
-                        {/* Meetings Section */}
-                        <section id="meetings-section" className="min-h-screen p-6 space-y-6 pt-24">
+                        <div className="border rounded-lg bg-white/70 backdrop-blur-sm">
                             <TeamMeetings teamId={teamId} />
-                        </section>
+                        </div>
                     </div>
-                </Suspense>
-            </main>
+
+                    {/* Side Column - Calendar and Events */}
+                    <div className="space-y-6">
+                        <TeamEvents
+                            date={date}
+                            setDate={setDate}
+                            teamId={teamId}
+                        />
+                        <TeamAlerts teamId={teamId} />
+                    </div>
+                </div>
+            </div>
         </div>
-    )
+    );
 }

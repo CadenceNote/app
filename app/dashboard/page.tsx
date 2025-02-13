@@ -1,11 +1,7 @@
 "use client"
 
 import { useEffect, useState, Suspense } from "react"
-import PSidebar from "@/components/personal_dashboard/PSidebar"
-import PHeader from "@/components/personal_dashboard/PHeader"
 import AIAssistant from "@/components/personal_dashboard/AIAssistant"
-import PStats from "@/components/personal_dashboard/PStats"
-import PAlerts from "@/components/personal_dashboard/PAlerts"
 import PEvents from "@/components/personal_dashboard/PEvents"
 import PTask from "@/components/personal_dashboard/PTask"
 import PMeeting from "@/components/personal_dashboard/PMeeting"
