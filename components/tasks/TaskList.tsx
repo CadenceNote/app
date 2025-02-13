@@ -20,7 +20,8 @@ import {
     ArrowUpDown,
     MoreVertical,
     Trash2,
-    Loader2
+    Loader2,
+    PlusCircle
 } from 'lucide-react';
 import {
     Select,
@@ -60,6 +61,11 @@ interface TaskListProps {
     onTaskSelect: (task: Task) => void;
     teamId?: number;
     isLoading?: boolean;
+    teams?: { id: number; name: string; }[];
+    selectedTeamId?: string;
+    onTeamChange?: (teamId: string) => void;
+    onCreateTask?: () => void;
+    showTeamSelect?: boolean;
 }
 
 type SortField = 'id' | 'title' | 'status' | 'priority' | 'due_date';
@@ -81,7 +87,17 @@ const sortById = (a: Task, b: Task) => {
     return aId - bId;
 };
 
-export function TaskList({ tasks, onTaskSelect, teamId, isLoading }: TaskListProps) {
+export function TaskList({
+    tasks,
+    onTaskSelect,
+    teamId,
+    isLoading,
+    teams,
+    selectedTeamId,
+    onTeamChange,
+    onCreateTask,
+    showTeamSelect = false
+}: TaskListProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilters, setStatusFilters] = useState<string[]>([]);
     const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "all">("all");
@@ -209,6 +225,34 @@ export function TaskList({ tasks, onTaskSelect, teamId, isLoading }: TaskListPro
                         </Select>
                     </div>
                 </div>
+                {showTeamSelect && teams && selectedTeamId && onTeamChange && (
+                    <div className="min-w-[200px]">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">Team</Label>
+                            <div className="flex items-center gap-2">
+                                <Select value={selectedTeamId} onValueChange={onTeamChange}>
+                                    <SelectTrigger className="text-sm [&_span]:font-medium">
+                                        <SelectValue placeholder="Select team" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Teams</SelectItem>
+                                        {teams.map((team) => (
+                                            <SelectItem key={team.id} value={team.id.toString()}>
+                                                {team.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {selectedTeamId !== "all" && onCreateTask && (
+                                    <Button onClick={onCreateTask} className="bg-indigo-600 hover:bg-indigo-700">
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        New Task
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="rounded-md border overflow-x-auto">

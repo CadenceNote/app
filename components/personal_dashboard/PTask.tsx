@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,108 +95,97 @@ export default function PTask({ searchTerm }: PTaskProps) {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold">My Tasks</h2>
-                <div className="flex items-center gap-4">
-                    {selectedTeamId !== "all" && (
-                        <Button onClick={() => setIsCreateModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700">
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            New Task
-                        </Button>
-                    )}
-                    <Select
-                        value={selectedTeamId}
-                        onValueChange={setSelectedTeamId}
-                    >
-                        <SelectTrigger className="w-[200px]">
-                            <SelectValue placeholder="Select team" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Teams</SelectItem>
-                            {teams?.map((team) => (
-                                <SelectItem key={team.id} value={team.id.toString()}>
-                                    {team.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
+        <Card className="space-y-6 ">
+            <CardHeader>
+                <CardTitle>My Tasks</CardTitle>
+                <CardDescription>
+                    Manage your tasks across all teams
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Tabs value={activeTab} onValueChange={setActiveTab} >
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="assigned">
+                            Assigned to me ({tasks?.filter(t => t.assignees.some(a => a.id === user?.id)).length})
+                        </TabsTrigger>
+                        <TabsTrigger value="watching">
+                            <Eye className="mr-2 h-4 w-4" />
+                            Watching ({tasks?.filter(t => t.watchers.some(w => w.id === user?.id)).length})
+                        </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="assigned">
+                        <Card className="p-6">
+                            {isLoadingTasks ? (
+                                <div className="flex items-center justify-center py-8">
+                                    Loading tasks...
+                                </div>
+                            ) : filteredTasks.length > 0 ? (
+                                <TaskList
+                                    tasks={filteredTasks}
+                                    onTaskSelect={setSelectedTask}
+                                    teamId={selectedTeamId === "all" ? undefined : Number(selectedTeamId)}
+                                    isLoading={isLoadingTasks}
+                                    teams={teams}
+                                    selectedTeamId={selectedTeamId}
+                                    onTeamChange={setSelectedTeamId}
+                                    onCreateTask={() => setIsCreateModalOpen(true)}
+                                    showTeamSelect={true}
+                                />
+                            ) : (
+                                <EmptyState
+                                    title="No tasks assigned"
+                                    description="Tasks assigned to you will appear here"
+                                />
+                            )}
+                        </Card>
+                    </TabsContent>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="assigned">
-                        Assigned to me ({tasks?.filter(t => t.assignees.some(a => a.id === user?.id)).length})
-                    </TabsTrigger>
-                    <TabsTrigger value="watching">
-                        <Eye className="mr-2 h-4 w-4" />
-                        Watching ({tasks?.filter(t => t.watchers.some(w => w.id === user?.id)).length})
-                    </TabsTrigger>
-                </TabsList>
+                    <TabsContent value="watching">
+                        <Card className="p-6">
+                            {isLoadingTasks ? (
+                                <div className="flex items-center justify-center py-8">
+                                    Loading tasks...
+                                </div>
+                            ) : filteredTasks.length > 0 ? (
+                                <TaskList
+                                    tasks={filteredTasks}
+                                    onTaskSelect={setSelectedTask}
+                                    teamId={selectedTeamId === "all" ? undefined : Number(selectedTeamId)}
+                                    isLoading={isLoadingTasks}
+                                    teams={teams}
+                                    selectedTeamId={selectedTeamId}
+                                    onTeamChange={setSelectedTeamId}
+                                    onCreateTask={() => setIsCreateModalOpen(true)}
+                                    showTeamSelect={true}
+                                />
+                            ) : (
+                                <EmptyState
+                                    title="No tasks on watch"
+                                    description="Tasks you're watching will appear here"
+                                />
+                            )}
+                        </Card>
+                    </TabsContent>
+                </Tabs>
 
-                <TabsContent value="assigned">
-                    <Card className="p-6">
-                        {isLoadingTasks ? (
-                            <div className="flex items-center justify-center py-8">
-                                Loading tasks...
-                            </div>
-                        ) : filteredTasks.length > 0 ? (
-                            <TaskList
-                                tasks={filteredTasks}
-                                onTaskSelect={setSelectedTask}
-                                teamId={selectedTeamId === "all" ? undefined : Number(selectedTeamId)}
-                                isLoading={isLoadingTasks}
-                            />
-                        ) : (
-                            <EmptyState
-                                title="No tasks assigned"
-                                description="Tasks assigned to you will appear here"
-                            />
-                        )}
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="watching">
-                    <Card className="p-6">
-                        {isLoadingTasks ? (
-                            <div className="flex items-center justify-center py-8">
-                                Loading tasks...
-                            </div>
-                        ) : filteredTasks.length > 0 ? (
-                            <TaskList
-                                tasks={filteredTasks}
-                                onTaskSelect={setSelectedTask}
-                                teamId={selectedTeamId === "all" ? undefined : Number(selectedTeamId)}
-                                isLoading={isLoadingTasks}
-                            />
-                        ) : (
-                            <EmptyState
-                                title="No tasks on watch"
-                                description="Tasks you're watching will appear here"
-                            />
-                        )}
-                    </Card>
-                </TabsContent>
-            </Tabs>
-
-            <CreateTaskModal
-                isOpen={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
-                teamId={Number(selectedTeamId)}
-                onTaskCreate={handleTaskCreate}
-            />
-
-            {selectedTask && (
-                <TaskDetail
-                    isOpen={!!selectedTask}
-                    onClose={() => setSelectedTask(undefined)}
-                    task={selectedTask}
-                    teamId={selectedTask.team_id}
-                    onTaskUpdate={updateTask}
+                <CreateTaskModal
+                    isOpen={isCreateModalOpen}
+                    onClose={() => setIsCreateModalOpen(false)}
+                    teamId={Number(selectedTeamId)}
+                    onTaskCreate={handleTaskCreate}
                 />
-            )}
-        </div>
+
+                {selectedTask && (
+                    <TaskDetail
+                        isOpen={!!selectedTask}
+                        onClose={() => setSelectedTask(undefined)}
+                        task={selectedTask}
+                        teamId={selectedTask.team_id}
+                        onTaskUpdate={updateTask}
+                    />
+                )}
+            </CardContent>
+        </Card>
     );
 }
 

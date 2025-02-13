@@ -66,8 +66,8 @@ export default function AIAssistant() {
         <Card className="border-indigo-100 bg-white/70 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
             <CardHeader>
                 <div className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-indigo-600" />
-                    <CardTitle>AI Assistant</CardTitle>
+                    <Sparkles className="h-5 w-5" />
+                    <CardTitle>Agilee AI </CardTitle>
                 </div>
                 <CardDescription>Get personalized insights and recommendations for your work.</CardDescription>
             </CardHeader>
@@ -88,8 +88,8 @@ export default function AIAssistant() {
                             >
                                 <div
                                     className={`rounded-2xl px-4 py-2 max-w-[80%] ${message.type === 'user'
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'bg-gradient-to-br from-green-50 to-indigo-50 text-gray-800'
+                                        ? 'bg-primary text-white'
+                                        : 'bg-indigo-400 text-white'
                                         }`}
                                 >
                                     <p className="text-sm whitespace-pre-wrap">

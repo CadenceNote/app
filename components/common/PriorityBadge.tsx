@@ -10,7 +10,7 @@ export function PriorityBadge({ priority, className }: PriorityBadgeProps) {
     if (priority === TaskPriority.URGENT) {
         return (
             <div className={cn("flex items-center gap-2", className)}>
-                <div className="h-1.5 w-12 rounded-full bg-red-500" />
+                <div className="h-1.5 w-12 rounded-full bg-red-400" />
                 {/* <span className="text-xs font-medium">{priority}</span> */}
             </div>
         );
@@ -29,10 +29,10 @@ export function PriorityBadge({ priority, className }: PriorityBadgeProps) {
                                     priority === TaskPriority.LOW ? 1 : 0
                         )
                             ? priority === TaskPriority.HIGH
-                                ? "bg-orange-500"
+                                ? "bg-orange-400"
                                 : priority === TaskPriority.MEDIUM
-                                    ? "bg-blue-400"
-                                    : "bg-green-500"
+                                    ? "bg-indigo-400"
+                                    : "bg-green-400"
                             : "bg-muted"
                     )}
                 />

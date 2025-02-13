@@ -35,6 +35,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { useRouter } from "next/navigation"
+import handleSignOut from "../common/handleSignOut"
 export function NavUser({
   user,
 }: {
@@ -46,7 +48,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const { theme, setTheme } = useTheme()
-
+  const router = useRouter()
   return (
     <SidebarMenu>
       <SidebarMenuItem className="flex gap-2">
@@ -88,7 +90,7 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem disabled>
                 <Sparkles />
                 Upgrade to Pro
               </DropdownMenuItem>
@@ -96,11 +98,11 @@ export function NavUser({
             <DropdownMenuSeparator />
 
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
                 <BadgeCheck />
                 Account
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem disabled>
                 <CreditCard />
                 Billing
               </DropdownMenuItem>
@@ -126,7 +128,7 @@ export function NavUser({
                 </DropdownMenuItem>
               )
             }
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSignOut(router)}>
               <LogOut />
               Log out
             </DropdownMenuItem>
