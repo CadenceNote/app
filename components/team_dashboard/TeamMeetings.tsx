@@ -331,7 +331,7 @@ export default function TeamMeetings({ teamId }: TeamMeetingsProps) {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>Date</Label>
-                                    <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
+                                    <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen} modal={true}>
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
@@ -344,7 +344,12 @@ export default function TeamMeetings({ teamId }: TeamMeetingsProps) {
                                                 {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0" style={calendarPopoverStyle}>
+                                        <PopoverContent
+                                            className="w-auto p-0"
+                                            align="start"
+                                            side="bottom"
+                                            sideOffset={4}
+                                        >
                                             <Calendar
                                                 mode="single"
                                                 selected={selectedDate}
@@ -353,6 +358,7 @@ export default function TeamMeetings({ teamId }: TeamMeetingsProps) {
                                                     setIsDatePopoverOpen(false);
                                                 }}
                                                 initialFocus
+
                                             />
                                         </PopoverContent>
                                     </Popover>

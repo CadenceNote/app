@@ -390,7 +390,6 @@ export default function PMeeting() {
                                             align="start"
                                             side="bottom"
                                             sideOffset={4}
-                                            style={calendarPopoverStyle}
                                         >
                                             <div className="bg-white rounded-md shadow-lg">
                                                 <Calendar
