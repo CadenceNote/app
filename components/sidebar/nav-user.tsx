@@ -37,6 +37,8 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { useRouter } from "next/navigation"
 import handleSignOut from "../common/handleSignOut"
+import { NotificationBell } from "../common/NotificationBell"
+
 export function NavUser({
   user,
 }: {
@@ -52,7 +54,6 @@ export function NavUser({
   return (
     <SidebarMenu>
       <SidebarMenuItem className="flex gap-2">
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
@@ -106,12 +107,11 @@ export function NavUser({
                 <CreditCard />
                 Billing
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/dashboard/notifications")}>
                 <Bell />
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
-
 
             <DropdownMenuSeparator />
 
