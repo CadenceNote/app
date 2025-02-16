@@ -14,7 +14,7 @@ import {
 import { Card } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Bell, Info, AlertTriangle, CheckCircle2, Plus } from 'lucide-react';
+import { Loader2, Bell, Info, AlertTriangle, CheckCircle2, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import {
     Dialog,
@@ -28,6 +28,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useUser } from '@/hooks/useUser';
 import { useTeams } from '@/hooks/useTeams';
 import { mutate } from 'swr';
+import Image from 'next/image';
+import { UserAvatar } from '@/components/common/UserAvatar';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -134,13 +136,13 @@ export default function NotificationsPage() {
     if (error) return <div>Failed to load notifications</div>;
 
     return (
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8 max-w-5xl">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Notifications</h1>
+                <h1 className="text-2xl font-semibold text-foreground">Notifications</h1>
                 <div className="flex gap-2">
                     <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button>
+                            <Button variant="default">
                                 <Plus className="w-4 h-4 mr-2" />
                                 Create Notification
                             </Button>
@@ -260,7 +262,7 @@ export default function NotificationsPage() {
                             </div>
                         </DialogContent>
                     </Dialog>
-                    <Button onClick={() => markAllAsRead()} disabled={isLoading}>
+                    <Button variant="outline" onClick={() => markAllAsRead()} disabled={isLoading}>
                         Mark all as read
                     </Button>
                 </div>
@@ -316,61 +318,67 @@ export default function NotificationsPage() {
 
             {isLoading ? (
                 <div className="flex justify-center items-center h-64">
-                    <Loader2 className="w-8 h-8 animate-spin" />
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                 </div>
             ) : (
                 <div className="space-y-4">
                     {notifications?.map((notification) => (
-                        <Card
-                            key={notification.id}
-                            className={`p-4 ${notification.status === 'unread' ? 'bg-gray-50' : 'bg-white'
-                                }`}
-                        >
-                            <div className="flex items-start gap-4">
-                                <div className="flex-shrink-0">
-                                    {getNotificationIcon(notification.type)}
-                                </div>
-                                <div className="flex-grow">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h3 className="font-semibold">{notification.title}</h3>
-                                        <Badge
-                                            variant="secondary"
-                                            className={getPriorityColor(notification.priority)}
+                        <div key={notification.id} className="w-full max-w-5xl mx-auto">
+                            <div className={`relative bg-background border border-border shadow-sm rounded-xl p-4 ${notification.status === 'unread' ? 'bg-accent/5' : ''
+                                }`}>
+                                <div className="flex items-center gap-4">
+                                    <div className="relative h-10 w-10 flex-shrink-0">
+                                        {notification.user_id ? (
+                                            <UserAvatar
+                                                userId={notification.metadata?.creator_id}
+                                                name={notification.metadata?.creator_name || 'User'}
+                                                className="h-10 w-10"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full bg-accent rounded-lg flex items-center justify-center">
+                                                {getNotificationIcon(notification.type)}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <p className="text-sm font-medium text-foreground">
+                                                    {notification.title}
+                                                </p>
+                                                <p className="text-[13px] text-muted-foreground mt-0.5">
+                                                    {notification.content}
+                                                </p>
+                                            </div>
+                                            <Badge variant="secondary" className={getPriorityColor(notification.priority)}>
+                                                {notification.priority}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                    {notification.status === 'unread' && (
+                                        <button
+                                            onClick={() => markAsRead(notification.id)}
+                                            className="rounded-lg flex items-center justify-center h-8 w-8 p-0 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                                         >
-                                            {notification.priority}
-                                        </Badge>
-                                    </div>
-                                    <p className="text-gray-600 mb-2">{notification.content}</p>
-                                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                                        <span>
-                                            {formatDistanceToNow(new Date(notification.created_at), {
-                                                addSuffix: true,
-                                            })}
-                                        </span>
-                                        {notification.action_url && (
-                                            <Link
-                                                href={notification.action_url}
-                                                className="text-blue-600 hover:text-blue-800"
-                                            >
-                                                View details
-                                            </Link>
-                                        )}
-                                        {notification.status === 'unread' && (
-                                            <button
-                                                onClick={() => markAsRead(notification.id)}
-                                                className="text-blue-600 hover:text-blue-800"
-                                            >
-                                                Mark as read
-                                            </button>
-                                        )}
-                                    </div>
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="mt-2 ml-14">
+                                    <p className="text-[12px] text-muted-foreground">
+                                        {formatDistanceToNow(new Date(notification.created_at), {
+                                            addSuffix: true,
+                                        })}
+                                    </p>
                                 </div>
                             </div>
-                        </Card>
+                        </div>
                     ))}
 
                     {notifications?.length === 0 && (
-                        <div className="text-center py-8 text-gray-500">
+                        <div className="text-center py-8 text-muted-foreground">
                             No notifications found
                         </div>
                     )}
@@ -378,7 +386,7 @@ export default function NotificationsPage() {
             )}
 
             {notifications && notifications.length >= ITEMS_PER_PAGE && (
-                <div className="flex justify-center mt-6">
+                <div className="flex justify-center mt-6 gap-2">
                     <Button
                         variant="outline"
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -386,7 +394,9 @@ export default function NotificationsPage() {
                     >
                         Previous
                     </Button>
-                    <span className="mx-4 py-2">Page {page}</span>
+                    <span className="flex items-center px-3 text-sm text-muted-foreground">
+                        Page {page}
+                    </span>
                     <Button
                         variant="outline"
                         onClick={() => setPage((p) => p + 1)}

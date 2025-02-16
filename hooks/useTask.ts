@@ -2,6 +2,8 @@ import useSWR, { mutate } from 'swr';
 import { taskApi } from '@/services/taskApi';
 import { Task, TaskStatus, TaskPriority, CreateTaskInput } from '@/lib/types/task';
 import { useTeams } from './useTeams';
+import { notificationService } from '@/services/notificationService';
+import { useUser } from './useUser';
 
 // Cache keys for tasks
 export const taskKeys = {
@@ -13,6 +15,7 @@ export const taskKeys = {
 
 export function useTask(teamId?: number, taskId?: string) {
     const { teams } = useTeams();
+    const { user } = useUser();
 
     // Main tasks query for the team
     const {
@@ -123,48 +126,70 @@ export function useTask(teamId?: number, taskId?: string) {
             throw new Error('Team ID is required to create a task');
         }
 
-        return handleMutation({
-            operation: () => taskApi.createTask(data.team, data),
-            optimisticUpdate: (current) => [
-                {
-                    ...data,
-                    id: Date.now().toString(),
-                    taskId: `T-${Date.now()}`,
-                    team_id: data.team,
-                    created_at: new Date().toISOString(),
-                    assignees: data.assignees || [],
-                    watchers: [],
-                } as Task,
-                ...current,
-            ],
-        });
+        const teamId = typeof data.team === 'object' ? data.team.id : data.team;
+
+        try {
+            const task = await handleMutation({
+                operation: async () => {
+                    // First create the task
+                    const newTask = await taskApi.createTask(teamId, data);
+
+                    return newTask;
+                },
+                optimisticUpdate: (current) => [
+                    {
+                        ...data,
+                        id: Date.now().toString(),
+                        taskId: `T-${Date.now()}`,
+                        team_id: teamId,
+                        created_at: new Date().toISOString(),
+                        assignees: [],
+                        watchers: [],
+                        comments: [],
+                        is_watching: false
+                    } as Task,
+                    ...current,
+                ],
+            });
+
+            return task;
+        } catch (error) {
+            console.error('Error creating task:', error);
+            throw error;
+        }
     };
 
     // Update task
     const updateTask = async (taskId: string, data: Partial<CreateTaskInput>) => {
-        // Find the task to get its team_id
-        const taskToUpdate = tasks.find(t => t.id === taskId);
-        if (!taskToUpdate) {
-            throw new Error('Task not found');
+        if (!teamId || !taskId) {
+            throw new Error('Team ID and Task ID are required to update a task');
         }
 
-        return handleMutation({
-            operation: () => taskApi.updateTask(taskToUpdate.team_id, parseInt(taskId), data),
-            optimisticUpdate: (current) =>
-                current.map(t =>
-                    t.id === taskId ? {
-                        ...t,
-                        ...data,
-                        assignees: data.assignees?.map(a => {
-                            if (typeof a === 'string') {
-                                const existingAssignee = t.assignees.find(existing => existing.id === a);
-                                return existingAssignee || { id: a, email: '', full_name: '' };
-                            }
-                            return a;
-                        }) || t.assignees
-                    } : t
-                ),
-        });
+        try {
+            const updatedTask = await handleMutation({
+                operation: () => taskApi.updateTask(teamId, parseInt(taskId), data),
+                optimisticUpdate: (current) =>
+                    current.map(t =>
+                        t.id === taskId ? {
+                            ...t,
+                            ...data,
+                            assignees: data.assignees?.map(a => {
+                                if (typeof a === 'string') {
+                                    const existingAssignee = t.assignees.find(existing => existing.id === a);
+                                    return existingAssignee || { id: a, email: '', full_name: '' };
+                                }
+                                return a;
+                            }) || t.assignees,
+                            updated_at: new Date().toISOString()
+                        } : t
+                    ),
+            });
+
+            return updatedTask;
+        } catch (error) {
+            console.error('Error updating task:', error);
+            throw error;
+        }
     };
 
     // Delete task

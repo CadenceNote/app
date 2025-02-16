@@ -113,7 +113,6 @@ export default function TeamTasks({ teamId, searchTerm }: TeamTasksProps) {
                         onClose={() => setSelectedTask(undefined)}
                         task={selectedTask}
                         teamId={teamId}
-                        onTaskUpdate={updateTask}
                     />
                 )}
             </CardContent>

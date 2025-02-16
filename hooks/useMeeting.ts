@@ -2,6 +2,8 @@ import useSWR, { mutate } from 'swr';
 import { meetingApi } from '@/services/meetingApi';
 import { Meeting } from '@/lib/types/meeting';
 import { useTeams } from './useTeams';
+import { notificationService } from '@/services/notificationService';
+import { useUser } from './useUser';
 
 // Cache keys for meetings
 export const meetingKeys = {
@@ -13,6 +15,7 @@ export const meetingKeys = {
 
 export function useMeeting(teamId?: number, meetingId?: number) {
     const { teams } = useTeams();
+    const { user } = useUser();
 
     // Main meetings query for the team
     const {
@@ -106,36 +109,110 @@ export function useMeeting(teamId?: number, meetingId?: number) {
 
     // Create meeting
     const createMeeting = async (data: any) => {
-        return handleMutation({
-            operation: () => meetingApi.createMeeting(teamId!, {
+        try {
+            const meeting = await meetingApi.createMeeting(teamId!, {
                 ...data,
                 participant_ids: data.participant_ids?.map((id: string) => id.toString()) || [],
-            }),
-            optimisticUpdate: (current) => [
-                ...current,
-                {
-                    ...data,
-                    id: Date.now(),
-                    team_id: teamId!,
-                    created_at: new Date().toISOString(),
-                    participants: data.participant_ids?.map((id: string) => ({ id })) || [],
-                } as Meeting,
-            ],
-        });
+            });
+            if (meeting && user) {
+                // Notify team if notify_team is true (default)
+                await notificationService.notifyMeetingCreated(
+                    meeting,
+                    meeting.team_id,
+                    user.full_name || user.email,
+                    data.notify_team !== false
+                );
+
+                // Notify participants
+                if (meeting.participants?.length) {
+                    for (const participantId of meeting.participants) {
+                        if (participantId !== user.id) { // Don't notify the creator
+                            await notificationService.notifyUserMeetingInvited(
+                                participantId,
+                                meeting,
+                                meeting.team_id
+                            );
+                        }
+                    }
+                }
+            }
+            mutate(['meetings', teamId]);
+            return meeting;
+        } catch (error) {
+            console.error('Error creating meeting:', error);
+            throw error;
+        }
     };
 
     // Update meeting
     const updateMeeting = async (meetingId: number, data: Partial<Meeting>) => {
-        return handleMutation({
-            operation: () => meetingApi.updateMeeting(teamId!, meetingId, {
+        try {
+            const oldMeeting = await meetingApi.getMeeting(teamId!, meetingId);
+            const meeting = await meetingApi.updateMeeting(teamId!, meetingId, {
                 ...data,
                 participant_ids: data.participants?.map(p => p.id.toString()) || undefined,
-            }),
-            optimisticUpdate: (current) =>
-                current.map(m =>
-                    m.id === meetingId ? { ...m, ...data } : m
-                ),
-        });
+            });
+
+            if (meeting && user) {
+                // Notify team if notify_team is true
+                if (data.notify_team) {
+                    await notificationService.notifyResourceUpdated(
+                        'meeting',
+                        meeting,
+                        meeting.team_id,
+                        user.full_name || user.email,
+                        true
+                    );
+                }
+
+                // If status changed
+                if (data.status && data.status !== oldMeeting.status) {
+                    await notificationService.notifyMeetingStatusChanged(
+                        meeting,
+                        meeting.team_id,
+                        oldMeeting.status,
+                        data.status
+                    );
+                }
+
+                // If participants changed, notify new participants
+                if (data.participants) {
+                    const newParticipants = data.participants.filter(
+                        (id: string) => !oldMeeting.participants.includes(id)
+                    );
+                    for (const participantId of newParticipants) {
+                        await notificationService.notifyUserMeetingInvited(
+                            participantId,
+                            meeting,
+                            meeting.team_id
+                        );
+                    }
+                }
+
+                // Notify all participants about changes
+                const involvedUsers = new Set([
+                    ...meeting.participants,
+                    meeting.creator_id
+                ]);
+                for (const userId of involvedUsers) {
+                    if (userId !== user.id) { // Don't notify the updater
+                        await notificationService.notifyUserResourceChanged(
+                            userId,
+                            'meeting',
+                            meeting,
+                            meeting.team_id,
+                            user.full_name || user.email
+                        );
+                    }
+                }
+            }
+            mutate(['meetings', teamId]);
+            mutate(['meeting', meetingId]);
+            return meeting;
+        } catch (error) {
+            console.error('Error updating meeting:', error);
+            throw error;
+        }
     };
 
     // Delete meeting

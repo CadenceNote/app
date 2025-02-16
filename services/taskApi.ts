@@ -171,7 +171,6 @@ export const taskApi = {
 
     // Get a single task
     getTask: async (teamId: number, taskId: number): Promise<Task> => {
-
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('User not authenticated');
 
@@ -280,9 +279,19 @@ export const taskApi = {
 
     // Create a new task
     createTask: async (teamId: number, data: CreateTaskInput): Promise<Task> => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
+        // Get authenticated user
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) throw new Error('User not authenticated');
 
+        // Get user details including full_name
+        const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('supabase_uid, email, full_name')
+            .eq('supabase_uid', authUser.id)
+            .single();
+
+        if (userError) throw userError;
+        if (!userData) throw new Error('User details not found');
 
         // First get the next team_ref_number
         const { data: maxRef } = await supabase
@@ -308,11 +317,28 @@ export const taskApi = {
                 due_date: data.due_date,
                 category: data.category,
                 team_id: teamId,
-                created_by_id: user.id,
+                created_by_id: authUser.id,
                 task_metadata: data.task_metadata,
                 team_ref_number: nextRefNumber
             }])
-            .select()
+            .select(`
+                *,
+                created_by:created_by_id(
+                    supabase_uid,
+                    email,
+                    full_name
+                ),
+                task_assignments(
+                    user_id,
+                    role,
+                    users:user_id(
+                        supabase_uid,
+                        email,
+                        full_name,
+                        avatar_url
+                    )
+                )
+            `)
             .single();
 
         if (taskError) throw taskError;
@@ -356,7 +382,36 @@ export const taskApi = {
             if (watcherError) throw watcherError;
         }
 
+        // Create notification for all team members
+        // Create individual notifications for each team member
+        if (teamMemberIds.length > 0) {
+            const notifications = teamMemberIds.map(userId => ({
+                user_id: userId,
+                type: 'info',  // Using the correct notification_type enum value
+                title: 'New Task Created',
+                content: `${userData.full_name} created a new task: ${newTask.title}`,
+                team_id: teamId,
+                resource_type: 'task',
+                resource_id: newTask.id.toString(),
+                action_url: `/dashboard/${teamId}/tasks/${newTask.id}`,
+                priority: 'medium',
+                status: 'unread',
+                metadata: {
+                    task_title: newTask.title,
+                    creator_id: authUser.id,
+                    creator_name: userData.full_name
+                }
+            }));
 
+            const { error: notificationError } = await supabase
+                .from('notifications')
+                .insert(notifications);
+
+            if (notificationError) {
+                console.error('Error creating notifications:', notificationError);
+                // Don't throw here, as the task was created successfully
+            }
+        }
 
         // Fetch the complete task with assignments
         const { data: taskWithAssignments, error: fetchError } = await supabase
@@ -410,16 +465,38 @@ export const taskApi = {
     // Update a task
     updateTask: async (teamId: number, taskId: number, data: Partial<CreateTaskInput>): Promise<Task> => {
         try {
+            // Get authenticated user
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) throw new Error('User not authenticated');
+
+            // Get user details including full_name
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('supabase_uid, email, full_name')
+                .eq('supabase_uid', authUser.id)
+                .single();
+
+            if (userError) throw userError;
+            if (!userData) throw new Error('User details not found');
+
+            // Validate inputs
+            if (!teamId || !taskId) {
+                throw new Error('Team ID and Task ID are required');
+            }
+
+            // Get the original task for comparison
+            const originalTask = await taskApi.getTask(teamId, taskId);
+
             // First update the task's basic information
             const updateData = {
-                title: data.title,
-                description: data.description,
-                status: data.status ? normalizeStatus(data.status) : undefined,
-                priority: data.priority ? normalizePriority(data.priority) : undefined,
-                type: data.type,
-                start_date: data.start_date,
-                due_date: data.due_date,
-                category: data.category,
+                ...(data.title !== undefined && { title: data.title }),
+                ...(data.description !== undefined && { description: data.description }),
+                ...(data.status !== undefined && { status: normalizeStatus(data.status) }),
+                ...(data.priority !== undefined && { priority: normalizePriority(data.priority) }),
+                ...(data.type !== undefined && { type: data.type }),
+                ...(data.start_date !== undefined && { start_date: data.start_date }),
+                ...(data.due_date !== undefined && { due_date: data.due_date }),
+                ...(data.category !== undefined && { category: data.category }),
                 updated_at: new Date().toISOString()
             };
 
@@ -438,7 +515,7 @@ export const taskApi = {
 
             if (!updatedTaskData) {
                 console.error("No data returned from update");
-                throw new Error('Update succeeded but no data returned');
+                throw new Error('Task not found');
             }
 
             // Handle assignees if provided
@@ -471,6 +548,107 @@ export const taskApi = {
                         console.error("Error inserting assignees:", assignError);
                         throw new Error(`Failed to insert assignees: ${assignError.message}`);
                     }
+                }
+            }
+
+            // Get team members for notifications
+            const { data: teamMembers } = await supabase
+                .from('team_members')
+                .select('user_id')
+                .eq('team_id', teamId);
+
+            const teamMemberIds = teamMembers?.map(member => member.user_id) || [];
+
+            // Create notifications for team members about the update
+            if (teamMemberIds.length > 0) {
+                let notificationTitle = 'Task Updated';
+                let notificationContent = `${userData.full_name} updated task: ${updatedTaskData.title}`;
+                let updateType = 'general';
+
+                // Build a list of changes
+                const changes: string[] = [];
+
+                if (data.title && data.title !== originalTask.title) {
+                    changes.push(`changed title to "${data.title}"`);
+                    updateType = 'title';
+                }
+                if (data.description && data.description !== originalTask.description) {
+                    changes.push(`updated description`);
+                    updateType = 'description';
+                }
+                if (data.status && data.status !== originalTask.status) {
+                    changes.push(`changed status from ${originalTask.status} to ${data.status}`);
+                    updateType = 'status';
+                    notificationTitle = 'Task Status Changed';
+                }
+                if (data.priority && data.priority !== originalTask.priority) {
+                    changes.push(`changed priority from ${originalTask.priority} to ${data.priority}`);
+                    updateType = 'priority';
+                    notificationTitle = 'Task Priority Changed';
+                }
+                if (data.due_date && data.due_date !== originalTask.due_date) {
+                    const formattedDate = new Date(data.due_date).toLocaleDateString();
+                    changes.push(`set due date to ${formattedDate}`);
+                    updateType = 'due_date';
+                }
+                if (data.start_date && data.start_date !== originalTask.start_date) {
+                    const formattedDate = new Date(data.start_date).toLocaleDateString();
+                    changes.push(`set start date to ${formattedDate}`);
+                    updateType = 'start_date';
+                }
+                if (data.assignees) {
+                    const oldAssignees = originalTask.assignees.map(a => a.id);
+                    const newAssignees = data.assignees;
+                    if (JSON.stringify(oldAssignees) !== JSON.stringify(newAssignees)) {
+                        changes.push('updated task assignments');
+                        updateType = 'assignments';
+                    }
+                }
+
+                // Create the notification content from the changes
+                if (changes.length > 0) {
+                    notificationContent = `${userData.full_name} ${changes.join(', ')} in task "${updatedTaskData.title}"`;
+                }
+
+                const notifications = teamMemberIds.map(userId => ({
+                    user_id: userId,
+                    type: 'info',
+                    title: notificationTitle,
+                    content: notificationContent,
+                    team_id: teamId,
+                    resource_type: 'task',
+                    resource_id: taskId.toString(),
+                    action_url: `/dashboard/${teamId}/tasks/${taskId}`,
+                    priority: 'medium',
+                    status: 'unread',
+                    metadata: {
+                        task_title: updatedTaskData.title,
+                        creator_id: authUser.id,
+                        creator_name: userData.full_name,
+                        update_type: updateType,
+                        changes,
+                        previous_status: data.status ? originalTask.status : undefined,
+                        new_status: data.status || undefined,
+                        previous_priority: data.priority ? originalTask.priority : undefined,
+                        new_priority: data.priority || undefined,
+                        previous_title: data.title ? originalTask.title : undefined,
+                        new_title: data.title || undefined,
+                        previous_due_date: data.due_date ? originalTask.due_date : undefined,
+                        new_due_date: data.due_date || undefined,
+                        previous_start_date: data.start_date ? originalTask.start_date : undefined,
+                        new_start_date: data.start_date || undefined,
+                        previous_assignees: data.assignees ? originalTask.assignees.map(a => a.id) : undefined,
+                        new_assignees: data.assignees || undefined
+                    }
+                }));
+
+                const { error: notificationError } = await supabase
+                    .from('notifications')
+                    .insert(notifications);
+
+                if (notificationError) {
+                    console.error('Error creating notifications:', notificationError);
+                    // Don't throw here, as the task was updated successfully
                 }
             }
 

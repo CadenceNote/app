@@ -1,15 +1,27 @@
-import { Bell } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Bell } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
+import { UserAvatar } from '@/components/common/UserAvatar';
+
+function Dot({ className }: { className?: string }) {
+    return (
+        <svg
+            width="6"
+            height="6"
+            fill="currentColor"
+            viewBox="0 0 6 6"
+            xmlns="http://www.w3.org/2000/svg"
+            className={className}
+            aria-hidden="true"
+        >
+            <circle cx="3" cy="3" r="3" />
+        </svg>
+    );
+}
 
 export function NotificationBell() {
     const { notifications, unreadCount, markAsRead } = useNotifications({
@@ -17,79 +29,99 @@ export function NotificationBell() {
         limit: 5,
     });
 
+    const handleMarkAllAsRead = () => {
+        if (notifications) {
+            notifications.forEach((notification) => {
+                markAsRead(notification.id);
+            });
+        }
+    };
+
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    className="relative w-10 h-10 rounded-full"
-                    aria-label="Notifications"
-                >
-                    <Bell className="h-5 w-5" />
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button size="icon" variant="outline" className="relative" aria-label="Open notifications">
+                    <Bell size={16} strokeWidth={2} aria-hidden="true" />
                     {unreadCount > 0 && (
-                        <Badge
-                            variant="destructive"
-                            className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center"
-                        >
-                            {unreadCount}
+                        <Badge className="absolute -top-2 left-full min-w-5 -translate-x-1/2 px-1">
+                            {unreadCount > 99 ? "99+" : unreadCount}
                         </Badge>
                     )}
                 </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-                <div className="flex items-center justify-between px-4 py-2 border-b">
-                    <span className="font-semibold">Notifications</span>
-                    <Link href="/dashboard/notifications" className="text-sm text-blue-600">
-                        View all
-                    </Link>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-1">
+                <div className="flex items-baseline justify-between gap-4 px-3 py-2">
+                    <div className="text-sm font-semibold">Notifications</div>
+                    {unreadCount > 0 && (
+                        <button
+                            className="text-xs font-medium hover:underline"
+                            onClick={handleMarkAllAsRead}
+                        >
+                            Mark all as read
+                        </button>
+                    )}
                 </div>
+                <div
+                    role="separator"
+                    aria-orientation="horizontal"
+                    className="-mx-1 my-1 h-px bg-border"
+                />
                 {notifications?.length === 0 ? (
-                    <div className="px-4 py-2 text-sm text-gray-500">
+                    <div className="px-4 py-2 text-sm text-muted-foreground">
                         No unread notifications
                     </div>
                 ) : (
                     notifications?.map((notification) => (
-                        <DropdownMenuItem
+                        <div
                             key={notification.id}
-                            className="px-4 py-3 cursor-default"
+                            className="rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                         >
-                            <div className="flex flex-col gap-1 w-full">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-medium">{notification.title}</span>
-                                    <span className="text-xs text-gray-500">
+                            <div className="relative flex items-start gap-3 pe-3">
+                                <div className="relative h-9 w-9 flex-shrink-0">
+                                    {notification.user_id && (
+                                        <UserAvatar
+                                            userId={notification.user_id}
+                                            name={notification.user_name || 'User'}
+                                            className="h-9 w-9"
+                                        />
+                                    )}
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <button
+                                        className="text-left text-foreground/80 after:absolute after:inset-0"
+                                        onClick={() => markAsRead(notification.id)}
+                                    >
+                                        <span className="font-medium text-foreground">
+                                            {notification.title}
+                                        </span>
+                                        <div className="text-sm text-muted-foreground line-clamp-2">
+                                            {notification.content}
+                                        </div>
+                                    </button>
+                                    <div className="text-xs text-muted-foreground">
                                         {formatDistanceToNow(new Date(notification.created_at), {
                                             addSuffix: true,
                                         })}
-                                    </span>
+                                    </div>
                                 </div>
-                                <p className="text-sm text-gray-600 line-clamp-2">
-                                    {notification.content}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                    {notification.action_url && (
-                                        <Link
-                                            href={notification.action_url}
-                                            className="text-xs text-blue-600 hover:text-blue-800"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            View details
-                                        </Link>
-                                    )}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            markAsRead(notification.id);
-                                        }}
-                                        className="text-xs text-blue-600 hover:text-blue-800"
-                                    >
-                                        Mark as read
-                                    </button>
-                                </div>
+                                {notification.status === 'unread' && (
+                                    <div className="absolute end-0 self-center">
+                                        <Dot className="text-primary" />
+                                    </div>
+                                )}
                             </div>
-                        </DropdownMenuItem>
+                        </div>
                     ))
                 )}
-            </DropdownMenuContent>
-        </DropdownMenu>
+                <div className="p-2 text-center">
+                    <Link
+                        href="/dashboard/notifications"
+                        className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                    >
+                        View all notifications
+                    </Link>
+                </div>
+            </PopoverContent>
+        </Popover>
     );
 } 

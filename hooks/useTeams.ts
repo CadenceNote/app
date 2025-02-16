@@ -1,5 +1,7 @@
 import useSWR, { mutate } from 'swr';
 import { teamApi } from '@/services/teamApi';
+import { notificationService } from '@/services/notificationService';
+import { notificationPreferencesService } from '@/services/notificationPreferencesService';
 import { Team, CreateTeamInput, UpdateTeamInput, AddTeamMemberInput } from '@/lib/types/team';
 import { useUser } from './useUser';
 
@@ -74,14 +76,20 @@ export function useTeams() {
     };
 
     // Create team
-    const createTeam = (newTeam: CreateTeamInput) =>
-        handleMutation({
-            operation: () => teamApi.createTeam(newTeam),
-            optimisticUpdate: (current) => [
-                ...current,
-                { ...newTeam, id: Date.now(), members: [] } as Team // Temporary ID
-            ],
-        });
+    const createTeam = async (newTeam: CreateTeamInput) => {
+        try {
+            const team = await teamApi.createTeam(newTeam);
+            if (team && user) {
+                // Create default notification preferences for the team
+                await notificationPreferencesService.createDefaultTeamPreferences(team.id);
+            }
+            mutate(['teams']);
+            return team;
+        } catch (error) {
+            console.error('Error creating team:', error);
+            throw error;
+        }
+    };
 
     // Update team
     const updateTeam = (teamId: number, data: UpdateTeamInput) =>
@@ -104,18 +112,27 @@ export function useTeams() {
         });
 
     // Add team member
-    const addTeamMember = (teamId: number, data: AddTeamMemberInput) =>
-        handleMutation({
-            teamId,
-            operation: () => teamApi.addTeamMember(teamId, data),
-            optimisticUpdate: (current) =>
-                current.map(team =>
-                    team.id === teamId ? {
-                        ...team,
-                        members: [...(team.members || []), data]
-                    } : team
-                ),
-        });
+    const addTeamMember = async (teamId: number, userId: string, userData: any) => {
+        try {
+            const result = await teamApi.addTeamMember(teamId, userId);
+            if (result) {
+                // Create default notification preferences for the new member
+                await notificationPreferencesService.createDefaultUserPreferences(userId);
+
+                // Notify team about new member
+                await notificationService.notifyTeamMemberJoined(
+                    teamId,
+                    userId,
+                    userData.full_name || userData.email
+                );
+            }
+            mutate(['team-members', teamId]);
+            return result;
+        } catch (error) {
+            console.error('Error adding team member:', error);
+            throw error;
+        }
+    };
 
     return {
         teams,

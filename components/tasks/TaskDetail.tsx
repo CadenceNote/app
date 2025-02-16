@@ -46,7 +46,6 @@ interface TaskDetailProps {
     onClose: () => void
     task: Task | undefined
     teamId: number
-    onTaskUpdate: (taskId: string, data: Partial<CreateTaskInput>) => Promise<Task | undefined>
 }
 
 interface DetailFieldProps {
@@ -189,7 +188,7 @@ const hasReplies = (commentId: number, comments: Comment[]): boolean => {
     return comments.some(comment => comment.parent_id === commentId);
 };
 
-export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: TaskDetailProps) {
+export function TaskDetail({ isOpen, onClose, task, teamId }: TaskDetailProps) {
     const [formData, setFormData] = useState(defaultFormData);
     const [isEditMode, setIsEditMode] = useState(false);
     const [newComment, setNewComment] = useState('');
@@ -211,7 +210,8 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
         addComment: addCommentMutation,
         deleteComment: deleteCommentMutation,
         toggleWatch: toggleWatchMutation,
-        mutateTask
+        mutateTask,
+        updateTask
     } = useTask(teamId, task?.id?.toString());
 
     // Effect to update form data when task data changes
@@ -325,7 +325,8 @@ export function TaskDetail({ isOpen, onClose, task, teamId, onTaskUpdate }: Task
                 category: formData.category
             };
 
-            const result = await onTaskUpdate(task.id, submitData);
+            // Use the updateTask function from useTask hook directly
+            const result = await updateTask(task.id.toString(), submitData);
 
             if (result) {
                 // Update local form data with the returned result
