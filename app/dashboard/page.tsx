@@ -92,7 +92,7 @@ export default function DashboardPage() {
                                 <div className="relative">
                                     <NotificationBell />
                                 </div>
-                                <DropdownMenu>
+                                {/* <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon" className="h-8 w-8">
                                             <UserAvatar
@@ -109,7 +109,7 @@ export default function DashboardPage() {
                                         <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/dashboard/settings')}>Settings</DropdownMenuItem>
                                         <DropdownMenuItem className="cursor-pointer" onClick={() => handleSignOut(router)}>Logout</DropdownMenuItem>
                                     </DropdownMenuContent>
-                                </DropdownMenu>
+                                </DropdownMenu> */}
                             </div>
                         </div>
                     </div>

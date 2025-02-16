@@ -43,7 +43,7 @@ export default function TeamHeader({ searchTerm, setSearchTerm, teamId }: TeamHe
 
                 <NotificationBell />
 
-                <DropdownMenu>
+                {/* <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">
                             <UserAvatar
@@ -60,7 +60,7 @@ export default function TeamHeader({ searchTerm, setSearchTerm, teamId }: TeamHe
                         <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/dashboard/settings')}>Settings</DropdownMenuItem>
                         <DropdownMenuItem className="cursor-pointer" onClick={() => handleSignOut(router)}>Logout</DropdownMenuItem>
                     </DropdownMenuContent>
-                </DropdownMenu>
+                </DropdownMenu> */}
             </div>
         </header>
     )
