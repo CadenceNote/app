@@ -14,6 +14,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import Logo from './common/Logo'
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'] })
 
@@ -69,14 +70,14 @@ const Layout = ({ children }) => {
             <header className="bg-background border-b">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
-                        <Link href="/" className={`flex items-center gap-3 text-xl font-bold text-foreground hover:text-foreground/80 ${jetbrainsMono.className}`}>
-                            <MousePointerClick className="w-5 h-5 text-blue-600" />
-                            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
-                                Agilee
-                            </span>
+                        {/* <Link href="/" className={`flex items-center gap-3 text-xl font-bold text-foreground hover:text-foreground/80 ${jetbrainsMono.className}`}>
+                                <MousePointerClick className="w-5 h-5 text-blue-600" />
+                                <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
+                                    Agilee
+                                </span>
 
-                        </Link>
-
+                            </Link> */}
+                        <Logo />
 
                         <nav className="flex items-center space-x-4">
                             {user ? (
