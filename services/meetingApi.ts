@@ -195,19 +195,30 @@ export const meetingApi = {
         const { data: teamMembers, error } = await supabase
             .from('team_members')
             .select(`
-                user:users(supabase_uid, email, full_name)
+                user_id,
+                role,
+                users!team_members_user_id_fkey (
+                    supabase_uid,
+                    email,
+                    full_name
+                )
             `)
             .eq('team_id', teamId)
-            .textSearch('user.full_name', query);
+            .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            console.error('Error fetching team members:', error);
+            throw error;
+        }
 
         return {
-            users: teamMembers.map(tm => ({
-                id: tm.user.supabase_uid,
-                name: tm.user.full_name,
-                email: tm.user.email
-            }))
+            users: teamMembers
+                .filter(tm => tm.users && tm.users.supabase_uid)
+                .map(tm => ({
+                    id: tm.users.supabase_uid,
+                    name: tm.users.full_name || '',
+                    email: tm.users.email || ''
+                }))
         };
     },
 

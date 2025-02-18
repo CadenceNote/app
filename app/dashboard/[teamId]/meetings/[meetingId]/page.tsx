@@ -1,248 +1,218 @@
-'use client';
+"use client"
 
-import { MeetingHeader } from '@/components/meetings/MeetingHeader';
-import { DailyStandupPage } from '@/components/meetings/DailyStandupPage';
-import { CreateMeetingModal } from '@/components/meetings/CreateMeetingModal';
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { useUser } from '@/hooks/useUser';
-import { meetingApi } from '@/services/meetingApi';
-import { teamApi } from '@/services/teamApi';
-import { taskApi } from '@/services/taskApi';
-import { TeamRole } from '@/lib/types/team';
-import { Skeleton } from "@/components/ui/skeleton";
-import { MeetingType, MeetingStatus } from '@/lib/types/meeting';
+import React from "react"
+import { useParams } from "next/navigation"
+import { RealtimeNoteBoard } from "@/components/meetings/RealtimeNoteBoard"
+import { useUser } from "@/hooks/useUser"
+import { Card, CardContent } from "@/components/ui/card"
+import { useTask } from "@/hooks/useTask"
+import { useMeeting } from "@/hooks/useMeeting"
+import { useTeams } from "@/hooks/useTeams"
+import { MeetingHeader } from "@/components/meetings/MeetingHeader"
+import { TeamRole } from "@/lib/types/team"
+import { Participant } from "@/lib/types/meeting"
 
-interface TeamMember {
-    user_id: number;
-    role: TeamRole;
-}
-
-interface TeamData {
-    id: number;
-    name: string;
-    members: TeamMember[];
-}
-
-interface Meeting {
-    id: number;
-    title: string;
-    description?: string;
-    type: MeetingType;
-    status: MeetingStatus;
-    duration_minutes: number;
-    start_time: string;
-    participants: Array<{
-        id: number;
-        email: string;
-        full_name: string;
-        role?: TeamRole;
-    }>;
-    notes: Record<string, {
-        blocks: Array<{
-            id: string;
-            type: 'todo' | 'blocker' | 'done';
-            content: {
-                text: string;
-                task?: {
-                    id: number;
-                };
-            };
-            created_by: number;
-            created_at: string;
-        }>;
-    }>;
-    settings?: {
-        goals: string[];
-        agenda: string[];
-        resources?: string[];
-    };
-}
-
-interface Task {
-    id: number;
-    title: string;
-    team_ref_number: string;
-}
-
-function LoadingSkeleton() {
+function LoadingSpinner({ message }: { message: string }) {
     return (
-        <div className="min-h-screen bg-[#F9FAFB]">
-            {/* Header Skeleton */}
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-200">
-                <div className="w-full">
-                    <div className="h-16 border-b border-gray-100">
-                        <div className="h-full max-w-[2000px] mx-auto px-6 flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <Skeleton className="h-4 w-24" />
-                                <Skeleton className="h-4 w-4" />
-                                <Skeleton className="h-4 w-32" />
-                            </div>
-                            <Skeleton className="h-8 w-28" />
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
-            {/* Content Skeleton */}
-            <div className="w-full">
-                <div className="max-w-[2000px] mx-auto px-6 py-6">
-
-                    {/* Goals and Agenda Skeleton */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                        {[...Array(3)].map((_, i) => (
-                            <div key={i} className="bg-white rounded-lg p-6">
-                                <Skeleton className="h-5 w-32 mb-4" />
-                                <div className="space-y-3">
-                                    {[...Array(2)].map((_, j) => (
-                                        <Skeleton key={j} className="h-4 w-full" />
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Participant Notes Skeleton */}
-                    <div className="space-y-6">
-                        {[...Array(2)].map((_, i) => (
-                            <div key={i} className="bg-white rounded-lg shadow-sm">
-                                <div className="grid grid-cols-[200px_1fr] divide-x">
-                                    <div className="p-4 space-y-4">
-                                        <div className="flex flex-col items-center text-center gap-3">
-                                            <Skeleton className="h-16 w-16 rounded-full" />
-                                            <div className="space-y-2 w-full">
-                                                <Skeleton className="h-5 w-32 mx-auto" />
-                                                <Skeleton className="h-4 w-40 mx-auto" />
-                                                <Skeleton className="h-5 w-24 mx-auto" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="p-4 space-y-6">
-                                        {['todo', 'blocker', 'done'].map((type) => (
-                                            <div key={type} className="space-y-3">
-                                                <div className="flex items-center gap-2">
-                                                    <Skeleton className="h-4 w-4" />
-                                                    <Skeleton className="h-5 w-24" />
-                                                </div>
-                                                <div className="space-y-3 pl-6">
-                                                    {[...Array(2)].map((_, j) => (
-                                                        <Skeleton key={j} className="h-20 w-full" />
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+        <div className="flex-1 flex items-center justify-center bg-background min-h-screen">
+            <div className="flex items-center gap-4">
+                <svg className="animate-spin h-10 w-10 text-primary" viewBox="0 0 24 24">
+                    <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                    />
+                    <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                </svg>
+                <div className="text-center space-y-2">
+                    <h3 className="text-lg font-medium text-foreground">Loading...</h3>
+                    <p className="text-sm text-muted-foreground">{message}</p>
                 </div>
             </div>
         </div>
-    );
+    )
 }
 
-export default function TeamMeetingsPage() {
-    const params = useParams();
-    const teamId = parseInt(params.teamId as string);
-    const meetingId = parseInt(params.meetingId as string);
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-    const { user, isLoading: isUserLoading } = useUser();
-    const [userRole, setUserRole] = useState<TeamRole | null>(null);
-    const [lastSaved, setLastSaved] = useState<Date | null>(null);
-    const [isSaving, setIsSaving] = useState(false);
+function ErrorDisplay({ message }: { message: string }) {
+    return (
+        <div className="flex-1 flex items-center justify-center bg-background min-h-screen">
+            <Card className="w-[350px]">
+                <CardContent className="flex flex-col items-center justify-center p-6">
+                    <svg className="h-12 w-12 text-destructive mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                    </svg>
+                    <h3 className="text-lg font-medium text-foreground mb-2">Error Loading Meeting</h3>
+                    <p className="text-sm text-muted-foreground text-center">{message}</p>
+                </CardContent>
+            </Card>
+        </div>
+    )
+}
 
-    // Centralized data states
-    const [meeting, setMeeting] = useState<Meeting | null>(null);
-    const [teamData, setTeamData] = useState<TeamData | null>(null);
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+export default function RealtimeDemo() {
+    console.log("[RealtimeDemo] Component mounting...")
+    const params = useParams()
+    const teamId = Number.parseInt(params.teamId as string)
+    const meetingId = Number.parseInt(params.meetingId as string)
 
-    const loadAllData = async () => {
-        if (!user) return;
+    // State for board loading
+    const [boardReady, setBoardReady] = React.useState(false)
+    const [showLoader, setShowLoader] = React.useState(true)
 
-        console.time('fullDataLoad');
-        try {
-            const [meetingResponse, teamResponse, roleResponse, tasksResponse] = await Promise.all([
-                meetingApi.getMeeting(teamId, meetingId),
-                teamApi.getTeam(teamId),
-                meetingApi.getTeamRole(teamId),
-                taskApi.listTasks(teamId)
-            ]);
+    // 1. Load user data
+    const { user, isLoading: userLoading, error: userError } = useUser()
+    console.log("[RealtimeDemo] User data:", { user: user?.id, loading: userLoading, error: userError })
 
-            setMeeting(meetingResponse as Meeting);
-            setTeamData(teamResponse as TeamData);
-            setUserRole(roleResponse.role);
-            setTasks(tasksResponse);
-        } catch (error) {
-            console.error('Error loading data:', error);
-        } finally {
-            setIsLoading(false);
-            console.timeEnd('fullDataLoad');
-        }
-    };
+    // 2. Load teams data
+    const { teams, isLoading: teamsLoading, teamsError } = useTeams()
+    const teamData = React.useMemo(() => teams?.find(t => t.id === teamId), [teams, teamId])
+    console.log("[RealtimeDemo] Teams data:", {
+        teamsCount: teams?.length,
+        teamFound: !!teamData,
+        loading: teamsLoading,
+        error: teamsError
+    })
 
-    useEffect(() => {
-        // if (!isUserLoading && user) {
-        loadAllData();
-        // }
-    }, [user, isUserLoading, teamId, meetingId]);
+    // 3. Load meeting data - only start loading when we have team data
+    const { meeting, isLoadingMeeting, meetingError } = useMeeting(
+        teamData ? teamId : undefined,
+        teamData ? meetingId : undefined
+    )
+    console.log("[RealtimeDemo] Meeting data:", {
+        meetingId,
+        found: !!meeting,
+        loading: isLoadingMeeting,
+        error: meetingError,
+        participantsCount: meeting?.participants?.length,
+        teamDataReady: !!teamData
+    })
 
-    if (isLoading || !userRole || !meeting || !teamData) {
-        return <LoadingSkeleton />;
+    // 4. Load tasks data - only start loading when we have team data
+    const { tasks, isLoadingTasks, tasksError } = useTask(teamData ? teamId : undefined)
+    console.log("[RealtimeDemo] Tasks data:", {
+        tasksCount: tasks?.length,
+        loading: isLoadingTasks,
+        error: tasksError
+    })
+
+    // Handle board ready state
+    const handleBoardReady = React.useCallback(() => {
+        console.log("[RealtimeDemo] Board signaled ready")
+        setBoardReady(true)
+        // Hide loader when board is ready
+        setShowLoader(false)
+    }, [])
+
+    // Effect to hide loader if taking too long
+    React.useEffect(() => {
+        // Fallback to hide loader after 10 seconds
+        const timeout = setTimeout(() => {
+            if (showLoader) {
+                console.log("[RealtimeDemo] Hiding loader after timeout")
+                setShowLoader(false)
+            }
+        }, 10000)
+
+        return () => clearTimeout(timeout)
+    }, [showLoader])
+
+    // Memoize formatted data
+    const formattedParticipants = React.useMemo(() =>
+        meeting?.participants?.map(p => ({
+            id: String(p.id),
+            email: p.email || "",
+            full_name: p.name || p.full_name || "",
+            role: teamData?.members?.find(m => m.user_id === String(p.id))?.role as TeamRole
+        })) || [],
+        [meeting?.participants, teamData?.members])
+
+    const formattedTasks = React.useMemo(() =>
+        tasks?.map(task => ({
+            id: Number(task.id),
+            title: task.title,
+            team_ref_number: task.team_ref_number || ""
+        })) || [],
+        [tasks])
+
+    const userRole = React.useMemo(() =>
+        teamData?.members?.find(m => m.user_id === user?.id)?.role as TeamRole || "member",
+        [teamData?.members, user?.id])
+
+    // Loading states for data fetching
+    if (userLoading || teamsLoading || isLoadingMeeting || isLoadingTasks) {
+        return <LoadingSpinner message="Loading meeting data..." />
     }
 
-    if (!user) {
-        return <div>User not found</div>;
-    }
+    // Error states
+    if (userError) return <ErrorDisplay message="Failed to load user data" />
+    if (teamsError) return <ErrorDisplay message="Failed to load team data" />
+    if (meetingError) return <ErrorDisplay message="Failed to load meeting data" />
+    if (tasksError) return <ErrorDisplay message="Failed to load tasks data" />
 
-    if (!meetingId) {
-        return <div>Meeting not found</div>;
-    }
+    // Data validation
+    if (!user) return <ErrorDisplay message="User not authenticated" />
+    if (!teamData) return <ErrorDisplay message="Team not found" />
+    if (!meeting) return <ErrorDisplay message="Meeting not found" />
 
-    // Prepare participants with roles
-    const participantsWithRoles = meeting.participants.map(p => ({
-        ...p,
-        role: teamData.members.find(m => m.user_id === p.id)?.role || 'member' as TeamRole
-    }));
+    console.log("[RealtimeDemo] Formatted participants:", formattedParticipants)
+    console.log("[RealtimeDemo] Rendering with data:", {
+        participantsCount: formattedParticipants.length,
+        tasksCount: formattedTasks.length,
+        userRole,
+        boardReady,
+        showLoader
+    })
 
     return (
-        <div className="min-h-screen bg-[#F9FAFB]">
+        <div className="min-h-screen bg-background">
+            {/* Loading Overlay */}
+            {showLoader && (
+                <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center transition-opacity duration-300">
+                    <LoadingSpinner message="Connecting to collaborative session..." />
+                </div>
+            )}
+
+            {/* Main content */}
             <MeetingHeader
                 teamId={String(teamId)}
                 teamName={teamData.name}
                 meetingId={String(meetingId)}
-                onCreateMeeting={() => setIsCreateModalOpen(true)}
                 title={meeting.title}
                 durationMinutes={meeting.duration_minutes}
-                participantCount={meeting.participants.length}
-                lastSaved={lastSaved}
-                isSaving={isSaving}
-                participants={participantsWithRoles}
-                canEdit={userRole === 'admin' || userRole === 'meeting_manager'}
-                onUpdate={loadAllData}
+                participantCount={formattedParticipants.length}
+                participants={formattedParticipants}
+                canEdit={userRole === "admin" || userRole === "meeting_manager"}
+                isDemoMode={true}
+                onUpdate={() => { }}
+                onCreateMeeting={() => { }}
             />
-            <DailyStandupPage
-                teamId={teamId}
-                meetingId={meetingId}
-                currentUserId={user.id}
-                userRole={userRole}
-                meeting={meeting}
-                teamData={teamData}
-                tasks={tasks}
-                onSaveStatusChange={(saving: boolean, saved: Date | null) => {
-                    setIsSaving(saving);
-                    if (saved) setLastSaved(saved);
-                }}
-                hideHeader
-                onUpdate={loadAllData}
-            />
-            <CreateMeetingModal
-                open={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
-                teamId={teamId}
-            />
+
+            <div className={`max-w-[2000px] mx-auto p-6 space-y-6 transition-opacity duration-300 ${!boardReady ? "opacity-0" : "opacity-100"}`}>
+                <RealtimeNoteBoard
+                    key={`${teamId}-${meetingId}`}
+                    meetingId={meetingId}
+                    currentUserId={user.id}
+                    userRole={userRole}
+                    participants={formattedParticipants}
+                    onReady={handleBoardReady}
+                    tasks={formattedTasks}
+                    teamId={teamId}
+                    meeting={meeting}
+                />
+            </div>
         </div>
-    );
+    )
 }

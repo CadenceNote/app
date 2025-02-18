@@ -13,12 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search } from 'lucide-react';
 import { UserAvatar } from '@/components/common/UserAvatar';
+import { TeamRole } from '@/lib/types/team';
 
 interface MeetingParticipant {
-    id: number;
+    id: string;
     email: string;
     full_name: string;
-    role?: string;
+    role?: TeamRole;
 }
 
 interface MeetingParticipantsModalProps {
@@ -63,7 +64,8 @@ export function MeetingParticipantsModal({
             setTeamMembers(response.users.map(user => ({
                 id: user.id,
                 email: user.email,
-                full_name: user.name
+                full_name: user.name,
+                role: 'member' as TeamRole
             })));
         } catch (error) {
             console.error('Failed to load team members:', error);
@@ -139,7 +141,7 @@ export function MeetingParticipantsModal({
                     </div>
 
                     {/* Team members list */}
-                    <div className="max-h-[300px] overflow-y-auto space-y-2">
+                    <div className="space-y-2">
                         {isLoading ? (
                             <div className="text-center py-4 text-sm text-gray-500">
                                 Loading team members...

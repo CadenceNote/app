@@ -4,7 +4,7 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Collaboration } from '@tiptap/extension-collaboration';
 import { CollaborationCursor } from '@tiptap/extension-collaboration-cursor';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as Y from 'yjs';
 import { supabase } from '@/lib/supabase';
 import { WebsocketProvider } from 'y-websocket';
@@ -17,6 +17,22 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { Task } from '@/lib/types/task';
 import { EditorView } from '@tiptap/pm/view';
 import { TaskDetail } from '../tasks/TaskDetail';
+import { UserAvatar } from '../common/UserAvatar';
+import { Suggestion } from '@tiptap/suggestion';
+import { PlusCircle, Calendar } from 'lucide-react';
+import { AvatarCacheProvider } from '@/contexts/AvatarCache';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import React from 'react';
+import { QuickTaskModal } from '../tasks/QuickTaskModal';
+import { useTask } from '@/hooks/useTask';
+import { useToast } from '@/hooks/use-toast';
 
 declare module '@tiptap/extension-mention' {
     interface MentionOptions {
@@ -54,7 +70,7 @@ interface MentionListProps {
         icon?: string;
         type: 'user' | 'task';
     }>;
-    command: (item: { id: number; label: string; type: 'user' | 'task' }) => void;
+    command: (item: { id: string; label: string; type: 'user' | 'task' }) => void;
     selectedIndex?: number;
 }
 
@@ -111,11 +127,15 @@ const MentionList = ({ items = [], command, selectedIndex = 0 }: MentionListProp
                                     }}
                                 >
                                     <div className="flex items-center gap-2">
-                                        {item.icon ? (
-                                            <img src={item.icon} alt="" className="h-6 w-6 rounded-full" />
+                                        {item.type === 'user' ? (
+                                            <UserAvatar
+                                                userId={String(item.id)}
+                                                name={item.label}
+                                                className="h-6 w-6"
+                                            />
                                         ) : (
                                             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted">
-                                                {item.label.charAt(0)}
+                                                #
                                             </div>
                                         )}
                                         <div className="flex flex-col">
@@ -284,224 +304,96 @@ const TaskMention = Mention.extend({
     }
 });
 
+// Remove the old SlashCommands extension
+// Add new command menu suggestion key
+const commandSuggestionKey = new PluginKey('commandSuggestion');
 
+// Add command types
+type CommandItem = {
+    title: string;
+    description?: string;
+    icon?: React.ReactNode;
+    command: (editor: Editor, range: Range) => void;
+};
 
-// Add SlashCommands extension
-const SlashCommands = Extension.create<SlashCommandsOptions>({
+// Update the CommandMenu component
+const CommandMenu = ({ items, command, selectedIndex = 0 }: {
+    items: CommandItem[];
+    command: (item: CommandItem) => void;
+    selectedIndex: number;
+}) => {
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    // Auto-focus the search input when the menu opens
+    React.useEffect(() => {
+        inputRef.current?.focus();
+    }, []);
+
+    return (
+        <Command className="w-[300px] rounded-lg border bg-background">
+            <CommandInput
+                ref={inputRef}
+                placeholder="Type a command..."
+                autoFocus={true}
+            />
+            <CommandList>
+                <CommandEmpty>No results found.</CommandEmpty>
+                <CommandGroup>
+                    {items.map((item, index) => (
+                        <CommandItem
+                            key={item.title}
+                            onSelect={() => command(item)}
+                            className={cn(
+                                "cursor-default",
+                                selectedIndex === index && "bg-accent text-accent-foreground"
+                            )}
+                        >
+                            {item.icon && (
+                                <div className="mr-2 flex h-4 w-4 items-center justify-center">
+                                    {item.icon}
+                                </div>
+                            )}
+                            <div>
+                                <p>{item.title}</p>
+                                {item.description && (
+                                    <p className="text-xs text-muted-foreground">{item.description}</p>
+                                )}
+                            </div>
+                        </CommandItem>
+                    ))}
+                </CommandGroup>
+            </CommandList>
+        </Command>
+    );
+};
+
+// Add commands extension
+const SlashCommands = Extension.create({
     name: 'slashCommands',
-
-    addProseMirrorPlugins() {
-        const plugin = new Plugin({
-            key: new PluginKey('slashCommands'),
-            props: {
-                handleKeyDown: (view: EditorView, event: KeyboardEvent) => {
-                    if (event.key === '/') {
-                        const { state } = view;
-                        const { selection } = state;
-                        const { $from } = selection;
-
-                        // Check if we're at the start of a line or after a space
-                        const isStart = $from.parentOffset === 0;
-                        const textBefore = $from.nodeBefore?.text;
-                        const isAfterSpace = textBefore?.endsWith(' ') || textBefore?.endsWith('\n');
-
-                        if (isStart || isAfterSpace) {
-                            // Show command menu
-                            let element = document.createElement('div');
-                            let root = createRoot(element);
-                            let popup: TippyInstance | null = null;
-                            let selectedIndex = 0;
-                            let isCleaningUp = false;
-                            let isDestroyed = false;
-
-                            const cleanup = () => {
-                                if (isCleaningUp || isDestroyed) return;
-                                isCleaningUp = true;
-
-                                // Remove event listeners first
-                                document.removeEventListener('keydown', handleKeyDown, { capture: true });
-                                document.removeEventListener('click', handleClickOutside);
-
-                                // Clean up tippy
-                                if (popup) {
-                                    popup.destroy();
-                                    popup = null;
-                                }
-
-                                // Clean up React root
-                                if (root) {
-                                    root.unmount();
-                                }
-
-                                // Clean up DOM
-                                if (element) {
-                                    element.remove();
-                                }
-
-                                isDestroyed = true;
-                                isCleaningUp = false;
-                            };
-
-                            const handleClickOutside = (e: MouseEvent) => {
-                                if (!element?.contains(e.target as Node)) {
-                                    cleanup();
-                                }
-                            };
-
-                            const renderCommandMenu = () => {
-                                if (isDestroyed) return;
-                                root.render(
-                                    <div className="overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-                                        <button
-                                            className={cn(
-                                                "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
-                                                selectedIndex === 0
-                                                    ? "bg-accent text-accent-foreground"
-                                                    : "hover:bg-accent/50 hover:text-accent-foreground"
-                                            )}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-
-                                                // Delete the slash character first
-                                                view.dispatch(
-                                                    view.state.tr.delete(
-                                                        $from.pos - (isAfterSpace ? 0 : 1),
-                                                        $from.pos
-                                                    )
-                                                );
-
-                                                // Call the onCommand callback
-                                                this.options.onCommand?.('createTask', {
-                                                    range: { from: $from.pos, to: $from.pos }
-                                                });
-
-                                                // Clean up
-                                                cleanup();
-                                            }}
-                                        >
-                                            <div className="flex flex-col">
-                                                <span>Create Task</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    Create a new task and mention it
-                                                </span>
-                                            </div>
-                                        </button>
-                                    </div>
-                                );
-                            };
-
-                            const handleKeyDown = (event: KeyboardEvent) => {
-                                if (isDestroyed) return false;
-
-                                // Only prevent default for specific keys
-                                if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab'].includes(event.key)) {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                }
-
-                                if (event.key === 'Escape' || event.key === 'Backspace') {
-                                    // Delete the slash character on backspace
-                                    if (event.key === 'Backspace') {
-                                        view.dispatch(
-                                            view.state.tr.delete(
-                                                $from.pos - (isAfterSpace ? 0 : 1),
-                                                $from.pos
-                                            )
-                                        );
-                                    }
-                                    cleanup();
-                                    return true;
-                                }
-
-                                if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                                    selectedIndex = 0; // Only one option for now
-                                    renderCommandMenu();
-                                    return true;
-                                }
-
-                                if (event.key === 'Enter' || event.key === 'Tab') {
-                                    // Delete the slash character first
-                                    view.dispatch(
-                                        view.state.tr.delete(
-                                            $from.pos - (isAfterSpace ? 0 : 1),
-                                            $from.pos
-                                        )
-                                    );
-
-                                    // Call the onCommand callback
-                                    this.options.onCommand?.('createTask', {
-                                        range: { from: $from.pos, to: $from.pos }
-                                    });
-
-                                    // Clean up
-                                    cleanup();
-                                    return true;
-                                }
-
-                                return false;
-                            };
-
-                            // Insert the slash character
-                            // view.dispatch(
-                            //     view.state.tr.insertText('/')
-                            // );
-
-                            renderCommandMenu();
-
-                            const coords = view.coordsAtPos($from.pos);
-                            popup = tippy(document.body, {
-                                getReferenceClientRect: () => ({
-                                    top: coords.top,
-                                    bottom: coords.bottom,
-                                    left: coords.left,
-                                    right: coords.left,
-                                    width: 0,
-                                    height: coords.bottom - coords.top,
-                                    x: coords.left,
-                                    y: coords.top,
-                                }),
-                                appendTo: () => document.body,
-                                content: element,
-                                showOnCreate: true,
-                                interactive: true,
-                                trigger: 'manual',
-                                placement: 'bottom-start',
-                                onHide: () => {
-                                    if (!isCleaningUp) {
-                                        cleanup();
-                                    }
-                                }
-                            });
-
-                            // Add keyboard event listener with capture to prevent only specific keys
-                            document.addEventListener('keydown', handleKeyDown, { capture: true });
-
-                            // Add click outside handler after a small delay to prevent immediate trigger
-                            setTimeout(() => {
-                                if (!isDestroyed) {
-                                    document.addEventListener('click', handleClickOutside);
-                                }
-                            }, 0);
-
-                            return true;
-                        }
-                    }
-                    return false;
-                },
-            },
-        });
-
-        return [plugin];
-    },
 
     addOptions() {
         return {
-            onCommand: undefined,
+            suggestion: {
+                char: '/',
+                command: ({ editor, range, props }: { editor: Editor; range: Range; props: CommandItem }) => {
+                    // Call the command function with editor and range
+                    if (props.command) {
+                        props.command(editor, range);
+                    }
+                },
+            },
         };
     },
-});
 
+    addProseMirrorPlugins() {
+        return [
+            Suggestion({
+                editor: this.editor,
+                ...this.options.suggestion,
+            }),
+        ];
+    },
+});
 
 export function RealtimeNoteEditor({
     ydoc,
@@ -514,7 +406,6 @@ export function RealtimeNoteEditor({
     sectionTitle,
     tasks,
     onMentionClick,
-    onTaskCreate,
     teamId,
 }: {
     ydoc: Y.Doc | null;
@@ -527,7 +418,6 @@ export function RealtimeNoteEditor({
     sectionTitle: string;
     tasks?: Array<{ id: number; title: string; team_ref_number: string; }>;
     onMentionClick?: (type: 'user' | 'task', id: string) => void;
-    onTaskCreate?: (task: any) => void;
     teamId: number;
 }) {
     const [isSaving, setIsSaving] = useState(false);
@@ -535,8 +425,6 @@ export function RealtimeNoteEditor({
     const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'hidden'>('hidden');
     const [isContentLoaded, setIsContentLoaded] = useState(false);
     const [isProviderConnected, setIsProviderConnected] = useState(false);
-    const [showTaskModal, setShowTaskModal] = useState(false);
-    const [commandRange, setCommandRange] = useState<{ from: number; to: number } | null>(null);
 
     const prevTasksRef = useRef(tasks);
     const editorRef = useRef<Editor | null>(null);
@@ -546,6 +434,22 @@ export function RealtimeNoteEditor({
 
     // Create a key that changes when important dependencies change
     const editorKey = `${section}-${currentUserId}-${participants.length}`;
+
+    // Add state for quick task modal
+    const [showQuickTaskModal, setShowQuickTaskModal] = useState(false);
+    const [taskInitialTitle, setTaskInitialTitle] = useState('');
+
+    // Add useTask hook
+    const { createTask } = useTask(teamId);
+
+    // Move toast to component level
+    const { toast } = useToast();
+
+    // Create a stable reference for tasks to prevent unnecessary re-renders
+    const tasksRef = useRef(tasks);
+    useEffect(() => {
+        tasksRef.current = tasks;
+    }, [tasks]);
 
     // Handle saving status with fade out animation
     useEffect(() => {
@@ -584,12 +488,15 @@ export function RealtimeNoteEditor({
             setIsSaving(true);
 
             try {
+                // Ensure section ID is within varchar(20) limit
+                const sectionId = section.length > 20 ? section.slice(0, 20) : section;
+
                 await supabase
                     .from('meeting_note_blocks')
                     .upsert({
                         meeting_id: meetingId,
                         participant_id: currentUserId,
-                        type: section,
+                        type: sectionId,
                         content: content,
                         version: Math.floor(Date.now() / 1000)
                     });
@@ -605,17 +512,19 @@ export function RealtimeNoteEditor({
         if (!editorRef.current) return;
 
         try {
+            // Ensure section ID is within varchar(20) limit
+            const sectionId = section.length > 20 ? section.slice(0, 20) : section;
+
             const { data } = await supabase
                 .from('meeting_note_blocks')
                 .select('content')
                 .eq('meeting_id', meetingId)
-                .eq('type', section)
+                .eq('type', sectionId)
                 .eq('participant_id', currentUserId)
                 .order('version', { ascending: false })
                 .limit(1);
 
             const content = data?.[0]?.content || EMPTY_DOC;
-
 
             isInitialLoad.current = true;
             editorRef.current.commands.setContent(content);
@@ -627,379 +536,483 @@ export function RealtimeNoteEditor({
         }
     };
 
-    // Editor initialization with mentions and slash commands
-    useEffect(() => {
+    // Update the getCommands callback
+    const getCommands = useCallback((editor: Editor): CommandItem[] => {
+        return [
+            {
+                title: 'Create Task',
+                description: 'Create a new task and mention it',
+                icon: <PlusCircle className="h-4 w-4" />,
+                command: (editor, range) => {
+                    // Delete the slash command
+                    editor.chain().focus().deleteRange(range).run();
 
+                    // Get the text from the current line as initial title
+                    const { from, to } = editor.state.selection;
+                    const text = editor.state.doc.textBetween(from, to, ' ');
 
-        const editor = new Editor({
-            extensions: [
-                StarterKit.configure({
-                    history: false,
-                }),
-                Collaboration.configure({
-                    document: ydoc || new Y.Doc(),
-                    field: section,
-                }),
-                ...(provider ? [
-                    CollaborationCursor.configure({
-                        provider: provider,
-                        user: {
-                            name: participants.find(p => p.id === currentUserId)?.full_name || 'Anonymous',
-                            color: COLORS[currentUserId % COLORS.length],
-                        },
-                    }),
-                ] : []),
-                // Add Mention extensions
-                UserMention.configure({
-                    HTMLAttributes: {
-                        class: 'mention mention-user cursor-pointer',
-                        'data-type': 'user'
+                    // Show the task modal
+                    setTaskInitialTitle(text);
+                    setShowQuickTaskModal(true);
+                },
+            },
+            {
+                title: 'Insert Date',
+                description: 'Insert today, tomorrow, or a specific date',
+                icon: <Calendar className="h-4 w-4" />,
+                command: (editor, range) => {
+                    editor.chain().focus().deleteRange(range).run();
+                    const today = new Date().toLocaleDateString();
+                    editor.chain().focus().insertContent(today).run();
+                },
+            },
+        ];
+    }, []);
+
+    // Memoize the editor configuration to prevent unnecessary re-renders
+    const editorConfig = useMemo(() => ({
+        extensions: [
+            StarterKit.configure({
+                history: false,
+            }),
+            Collaboration.configure({
+                document: ydoc || new Y.Doc(),
+                field: section,
+                fragmentIdentifier: `${section}-${currentUserId}`,
+            }),
+            ...(provider ? [
+                CollaborationCursor.configure({
+                    provider: provider,
+                    user: {
+                        name: participants.find(p => p.id === currentUserId)?.full_name || 'Anonymous',
+                        color: COLORS[currentUserId % COLORS.length],
                     },
-                    suggestion: {
-                        char: '@',
-                        pluginKey: userMentionPluginKey,
-                        items: ({ query }) => {
-                            return participants
-                                .filter(participant =>
-                                    participant.full_name.toLowerCase().includes(query.toLowerCase()) ||
-                                    participant.email.toLowerCase().includes(query.toLowerCase())
-                                )
-                                .map(participant => ({
-                                    id: participant.id,
-                                    label: participant.full_name,
-                                    description: participant.email,
-                                    icon: `https://avatar.vercel.sh/${participant.email}`,
-                                    type: 'user' as const
-                                }));
-                        },
-                        render: () => {
-                            let popup: TippyInstance | null = null;
-                            let element: HTMLElement | null = null;
-                            let root: ReturnType<typeof createRoot> | null = null;
-                            let selectedIndex = 0;
-                            let currentItems: any[] = [];
-                            let currentCommand: ((item: any) => void) | null = null;
-
-                            return {
-                                onStart: (props) => {
-                                    element = document.createElement('div');
-                                    root = createRoot(element);
-                                    selectedIndex = 0;
-                                    currentItems = props.items || [];
-                                    currentCommand = props.command;
-
-                                    popup = tippy(document.body, {
-                                        getReferenceClientRect: props.clientRect,
-                                        appendTo: () => document.body,
-                                        content: element,
-                                        showOnCreate: true,
-                                        interactive: true,
-                                        trigger: 'manual',
-                                        placement: 'bottom-start',
-                                    });
-
-                                    root.render(
-                                        <MentionList
-                                            items={currentItems}
-                                            command={currentCommand}
-                                            selectedIndex={selectedIndex}
-                                        />
-                                    );
-                                },
-                                onUpdate: (props) => {
-                                    if (!popup || !element || !root) return;
-                                    currentItems = props.items || [];
-                                    currentCommand = props.command;
-
-                                    popup.setProps({
-                                        getReferenceClientRect: props.clientRect,
-                                    });
-
-                                    root.render(
-                                        <MentionList
-                                            items={currentItems}
-                                            command={currentCommand}
-                                            selectedIndex={selectedIndex}
-                                        />
-                                    );
-                                },
-                                onKeyDown: (props) => {
-                                    if (props.event.key === 'ArrowUp') {
-                                        props.event.preventDefault();
-                                        props.event.stopPropagation();
-                                        props.event.stopImmediatePropagation();
-                                        selectedIndex = selectedIndex <= 0 ? currentItems.length - 1 : selectedIndex - 1;
-                                        root?.render(
-                                            <MentionList
-                                                items={currentItems}
-                                                command={currentCommand}
-                                                selectedIndex={selectedIndex}
-                                            />
-                                        );
-                                        return true;
-                                    }
-
-                                    if (props.event.key === 'ArrowDown') {
-                                        props.event.preventDefault();
-                                        props.event.stopPropagation();
-                                        props.event.stopImmediatePropagation();
-                                        selectedIndex = selectedIndex >= currentItems.length - 1 ? 0 : selectedIndex + 1;
-                                        root?.render(
-                                            <MentionList
-                                                items={currentItems}
-                                                command={currentCommand}
-                                                selectedIndex={selectedIndex}
-                                            />
-                                        );
-                                        return true;
-                                    }
-
-                                    if (props.event.key === 'Enter' || props.event.key === 'Tab') {
-                                        props.event.preventDefault();
-                                        props.event.stopPropagation();
-                                        props.event.stopImmediatePropagation();
-                                        if (currentItems[selectedIndex] && currentCommand) {
-                                            currentCommand({
-                                                id: String(currentItems[selectedIndex].id),
-                                                label: currentItems[selectedIndex].label,
-                                                type: currentItems[selectedIndex].type
-                                            });
-                                            popup?.destroy();
-                                        }
-                                        return true;
-                                    }
-
-                                    return false;
-                                },
-                                onExit: () => {
-                                    popup?.destroy();
-                                    root?.unmount();
-                                    element?.remove();
-                                },
-                            };
-                        },
-                    }
                 }),
-                // Task mentions with #
-                TaskMention.configure({
-                    HTMLAttributes: {
-                        class: 'mention mention-task cursor-pointer',
-                        'data-type': 'task'
+            ] : []),
+            UserMention.configure({
+                HTMLAttributes: {
+                    class: 'mention mention-user cursor-pointer',
+                    'data-type': 'user'
+                },
+                suggestion: {
+                    char: '@',
+                    pluginKey: userMentionPluginKey,
+                    items: ({ query }) => {
+                        return participants
+                            .filter(participant =>
+                                participant.full_name.toLowerCase().includes(query.toLowerCase()) ||
+                                participant.email.toLowerCase().includes(query.toLowerCase())
+                            )
+                            .map(participant => ({
+                                id: participant.id,
+                                label: participant.full_name,
+                                description: participant.email,
+                                icon: `https://avatar.vercel.sh/${participant.email}`,
+                                type: 'user' as const
+                            }));
                     },
-                    suggestion: {
-                        char: '#',
-                        pluginKey: taskMentionPluginKey,
-                        items: ({ query }) => {
-                            // Use both prevTasksRef.current and tasks to ensure we have the latest tasks
-                            const allTasks = tasks ? [...tasks] : [];
+                    render: () => {
+                        let popup: any = null;
+                        let element: HTMLElement | null = null;
+                        let root: ReturnType<typeof createRoot> | null = null;
+                        let selectedIndex = 0;
+                        let currentItems: Array<{
+                            id: number;
+                            label: string;
+                            description?: string;
+                            icon?: string;
+                            type: 'user' | 'task';
+                        }> = [];
+                        let currentCommand: ((item: { id: string; label: string; type: 'user' | 'task' }) => void) | null = null;
 
-                            // Add any tasks from prevTasksRef that aren't in tasks
-                            if (prevTasksRef.current) {
-                                prevTasksRef.current.forEach(prevTask => {
-                                    if (!allTasks.some(t => t.id === prevTask.id)) {
-                                        allTasks.push(prevTask);
-                                    }
+                        return {
+                            onStart: (props) => {
+                                element = document.createElement('div');
+                                root = createRoot(element);
+                                selectedIndex = 0;
+                                currentItems = props.items;
+                                currentCommand = props.command;
+
+                                popup = tippy(document.body, {
+                                    getReferenceClientRect: props.clientRect,
+                                    appendTo: () => document.body,
+                                    content: element,
+                                    showOnCreate: true,
+                                    interactive: true,
+                                    trigger: 'manual',
+                                    placement: 'bottom-start',
                                 });
-                            }
 
-                            // Sort tasks by id descending to show newest first
-                            allTasks.sort((a, b) => b.id - a.id);
-
-                            return allTasks
-                                .filter(task =>
-                                    `${task.team_ref_number} ${task.title}`.toLowerCase().includes(query.toLowerCase())
-                                )
-                                .map(task => ({
-                                    id: task.id,
-                                    label: `${task.team_ref_number} ${task.title}`,
-                                    type: 'task' as const
-                                }));
-                        },
-                        render: () => {
-                            let popup: TippyInstance | null = null;
-                            let element: HTMLElement | null = null;
-                            let root: ReturnType<typeof createRoot> | null = null;
-                            let selectedIndex = 0;
-                            let currentItems: any[] = [];
-                            let currentCommand: ((item: any) => void) | null = null;
-
-                            return {
-                                onStart: (props) => {
-                                    element = document.createElement('div');
-                                    root = createRoot(element);
-                                    selectedIndex = 0;
-                                    currentItems = props.items || [];
-                                    currentCommand = props.command;
-
-                                    popup = tippy(document.body, {
-                                        getReferenceClientRect: props.clientRect,
-                                        appendTo: () => document.body,
-                                        content: element,
-                                        showOnCreate: true,
-                                        interactive: true,
-                                        trigger: 'manual',
-                                        placement: 'bottom-start',
-                                    });
-
-                                    root.render(
+                                root.render(
+                                    <AvatarCacheProvider>
                                         <MentionList
                                             items={currentItems}
                                             command={currentCommand}
                                             selectedIndex={selectedIndex}
                                         />
-                                    );
-                                },
-                                onUpdate(props) {
-                                    if (!popup || !element || !root) return;
-                                    currentItems = props.items || [];
-                                    currentCommand = props.command;
+                                    </AvatarCacheProvider>
+                                );
+                            },
+                            onUpdate: (props) => {
+                                if (!popup || !element || !root) return;
+                                currentItems = props.items;
+                                currentCommand = props.command;
 
-                                    root.render(
+                                popup.setProps({
+                                    getReferenceClientRect: props.clientRect,
+                                });
+
+                                root.render(
+                                    <AvatarCacheProvider>
                                         <MentionList
                                             items={currentItems}
                                             command={currentCommand}
                                             selectedIndex={selectedIndex}
                                         />
+                                    </AvatarCacheProvider>
+                                );
+                            },
+                            onKeyDown: (props) => {
+                                if (props.event.key === 'ArrowUp') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    selectedIndex = selectedIndex <= 0 ? currentItems.length - 1 : selectedIndex - 1;
+                                    root?.render(
+                                        <AvatarCacheProvider>
+                                            <MentionList
+                                                items={currentItems}
+                                                command={currentCommand}
+                                                selectedIndex={selectedIndex}
+                                            />
+                                        </AvatarCacheProvider>
                                     );
-                                    popup.setProps({
-                                        getReferenceClientRect: props.clientRect,
-                                    });
-                                },
-                                onKeyDown: (props) => {
-                                    if (props.event.key === 'ArrowUp') {
-                                        props.event.preventDefault();
-                                        props.event.stopPropagation();
-                                        props.event.stopImmediatePropagation();
-                                        selectedIndex = selectedIndex <= 0 ? currentItems.length - 1 : selectedIndex - 1;
-                                        root?.render(
+                                    return true;
+                                }
+
+                                if (props.event.key === 'ArrowDown') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    selectedIndex = selectedIndex >= currentItems.length - 1 ? 0 : selectedIndex + 1;
+                                    root?.render(
+                                        <AvatarCacheProvider>
                                             <MentionList
                                                 items={currentItems}
                                                 command={currentCommand}
                                                 selectedIndex={selectedIndex}
                                             />
-                                        );
-                                        return true;
-                                    }
+                                        </AvatarCacheProvider>
+                                    );
+                                    return true;
+                                }
 
-                                    if (props.event.key === 'ArrowDown') {
-                                        props.event.preventDefault();
-                                        props.event.stopPropagation();
-                                        props.event.stopImmediatePropagation();
-                                        selectedIndex = selectedIndex >= currentItems.length - 1 ? 0 : selectedIndex + 1;
-                                        root?.render(
-                                            <MentionList
-                                                items={currentItems}
-                                                command={currentCommand}
-                                                selectedIndex={selectedIndex}
-                                            />
-                                        );
-                                        return true;
+                                if (props.event.key === 'Enter' || props.event.key === 'Tab') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    if (currentItems[selectedIndex] && currentCommand) {
+                                        currentCommand({
+                                            id: String(currentItems[selectedIndex].id),
+                                            label: currentItems[selectedIndex].label,
+                                            type: currentItems[selectedIndex].type
+                                        });
+                                        popup?.destroy();
                                     }
+                                    return true;
+                                }
 
-                                    if (props.event.key === 'Enter' || props.event.key === 'Tab') {
-                                        props.event.preventDefault();
-                                        props.event.stopPropagation();
-                                        props.event.stopImmediatePropagation();
-                                        if (currentItems[selectedIndex] && currentCommand) {
-                                            currentCommand({
-                                                id: String(currentItems[selectedIndex].id),
-                                                label: currentItems[selectedIndex].label,
-                                                type: currentItems[selectedIndex].type
-                                            });
-                                            popup?.destroy();
-                                        }
-                                        return true;
-                                    }
-
-                                    return false;
-                                },
-                                onExit: () => {
-                                    if (popup) {
-                                        popup.destroy();
-                                        popup = null;
-                                    }
-                                    if (root) {
-                                        root.unmount();
-                                        root = null;
-                                    }
-                                    if (element) {
-                                        element.remove();
-                                        element = null;
-                                    }
-                                },
-                            };
-                        },
-                    }
-                }),
-                SlashCommands.configure({
-                    onCommand: (command: string, attrs: { range: { from: number; to: number } }) => {
-                        if (command === 'createTask') {
-                            // Store the range for later deletion
-                            setCommandRange({
-                                from: attrs.range.from - 1, // Include the slash
-                                to: attrs.range.to
-                            });
-                            setShowTaskModal(true);
-                        }
+                                return false;
+                            },
+                            onExit: () => {
+                                popup?.destroy();
+                                root?.unmount();
+                                element?.remove();
+                            },
+                        };
                     },
-                }),
+                }
+            }),
+            TaskMention.configure({
+                HTMLAttributes: {
+                    class: 'mention mention-task cursor-pointer',
+                    'data-type': 'task'
+                },
+                suggestion: {
+                    char: '#',
+                    pluginKey: taskMentionPluginKey,
+                    items: ({ query }) => {
+                        const allTasks = tasksRef.current || [];
+                        return allTasks
+                            .filter(task =>
+                                `${task.team_ref_number} ${task.title}`.toLowerCase().includes(query.toLowerCase())
+                            )
+                            .map(task => ({
+                                id: task.id,
+                                label: `${task.team_ref_number} ${task.title}`,
+                                type: 'task' as const
+                            }));
+                    },
+                    render: () => {
+                        let popup: any = null;
+                        let element: HTMLElement | null = null;
+                        let root: ReturnType<typeof createRoot> | null = null;
+                        let selectedIndex = 0;
+                        let currentItems: Array<{
+                            id: number;
+                            label: string;
+                            type: 'task';
+                        }> = [];
+                        let currentCommand: ((item: { id: string; label: string; type: 'task' }) => void) | null = null;
 
-            ],
-            content: EMPTY_DOC,
-            editable: editable && provider?.wsconnected,
-            onCreate: () => {
-                if (provider?.wsconnected && provider?.synced) {
+                        return {
+                            onStart: (props) => {
+                                element = document.createElement('div');
+                                root = createRoot(element);
+                                selectedIndex = 0;
+                                currentItems = props.items;
+                                currentCommand = props.command;
+
+                                popup = tippy(document.body, {
+                                    getReferenceClientRect: props.clientRect,
+                                    appendTo: () => document.body,
+                                    content: element,
+                                    showOnCreate: true,
+                                    interactive: true,
+                                    trigger: 'manual',
+                                    placement: 'bottom-start',
+                                });
+
+                                root.render(
+                                    <AvatarCacheProvider>
+                                        <MentionList
+                                            items={currentItems}
+                                            command={currentCommand}
+                                            selectedIndex={selectedIndex}
+                                        />
+                                    </AvatarCacheProvider>
+                                );
+                            },
+                            onUpdate: (props) => {
+                                if (!popup || !element || !root) return;
+                                currentItems = props.items;
+                                currentCommand = props.command;
+
+                                popup.setProps({
+                                    getReferenceClientRect: props.clientRect,
+                                });
+
+                                root.render(
+                                    <AvatarCacheProvider>
+                                        <MentionList
+                                            items={currentItems}
+                                            command={currentCommand}
+                                            selectedIndex={selectedIndex}
+                                        />
+                                    </AvatarCacheProvider>
+                                );
+                            },
+                            onKeyDown: (props) => {
+                                if (props.event.key === 'ArrowUp') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    selectedIndex = selectedIndex <= 0 ? currentItems.length - 1 : selectedIndex - 1;
+                                    root?.render(
+                                        <AvatarCacheProvider>
+                                            <MentionList
+                                                items={currentItems}
+                                                command={currentCommand}
+                                                selectedIndex={selectedIndex}
+                                            />
+                                        </AvatarCacheProvider>
+                                    );
+                                    return true;
+                                }
+
+                                if (props.event.key === 'ArrowDown') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    selectedIndex = selectedIndex >= currentItems.length - 1 ? 0 : selectedIndex + 1;
+                                    root?.render(
+                                        <AvatarCacheProvider>
+                                            <MentionList
+                                                items={currentItems}
+                                                command={currentCommand}
+                                                selectedIndex={selectedIndex}
+                                            />
+                                        </AvatarCacheProvider>
+                                    );
+                                    return true;
+                                }
+
+                                if (props.event.key === 'Enter' || props.event.key === 'Tab') {
+                                    props.event.preventDefault();
+                                    props.event.stopPropagation();
+                                    props.event.stopImmediatePropagation();
+                                    if (currentItems[selectedIndex] && currentCommand) {
+                                        currentCommand({
+                                            id: String(currentItems[selectedIndex].id),
+                                            label: currentItems[selectedIndex].label,
+                                            type: currentItems[selectedIndex].type
+                                        });
+                                        popup?.destroy();
+                                    }
+                                    return true;
+                                }
+
+                                return false;
+                            },
+                            onExit: () => {
+                                popup?.destroy();
+                                root?.unmount();
+                                element?.remove();
+                            },
+                        };
+                    },
+                }
+            }),
+            SlashCommands.configure({
+                suggestion: {
+                    items: ({ query }: { query: string }) => {
+                        const commands = getCommands(editorRef.current!);
+                        return commands.filter(item =>
+                            item.title.toLowerCase().includes(query.toLowerCase())
+                        );
+                    },
+                    render: () => {
+                        let popup: any = null;
+                        let element: HTMLElement | null = null;
+                        let root: ReturnType<typeof createRoot> | null = null;
+                        let selectedIndex = 0;
+
+                        const updateList = (items: CommandItem[], command: (item: CommandItem) => void) => {
+                            if (!root) return;
+
+                            root.render(
+                                <CommandMenu
+                                    items={items}
+                                    selectedIndex={selectedIndex}
+                                    command={command}
+                                />
+                            );
+                        };
+
+                        return {
+                            onStart: (props) => {
+                                element = document.createElement('div');
+                                root = createRoot(element);
+                                selectedIndex = 0;
+
+                                popup = tippy(document.body, {
+                                    getReferenceClientRect: props.clientRect,
+                                    appendTo: () => document.body,
+                                    content: element,
+                                    showOnCreate: true,
+                                    interactive: true,
+                                    trigger: 'manual',
+                                    placement: 'bottom-start',
+                                    maxWidth: 'none',
+                                });
+
+                                updateList(props.items, props.command);
+                            },
+                            onUpdate: (props) => {
+                                selectedIndex = props.selectedIndex || 0;
+                                updateList(props.items, props.command);
+
+                                popup?.setProps({
+                                    getReferenceClientRect: props.clientRect,
+                                });
+                            },
+                            onKeyDown: (props) => {
+                                if (!props.items.length) return false;
+
+                                if (props.event.key === 'ArrowUp') {
+                                    selectedIndex = ((selectedIndex + props.items.length - 1) % props.items.length);
+                                    updateList(props.items, props.command);
+                                    return true;
+                                }
+
+                                if (props.event.key === 'ArrowDown') {
+                                    selectedIndex = ((selectedIndex + 1) % props.items.length);
+                                    updateList(props.items, props.command);
+                                    return true;
+                                }
+
+                                if (props.event.key === 'Enter' || props.event.key === 'Tab') {
+                                    const item = props.items[selectedIndex];
+                                    if (item) {
+                                        props.command(item);
+                                    }
+                                    return true;
+                                }
+
+                                if (props.event.key === 'Escape') {
+                                    popup?.destroy();
+                                    return true;
+                                }
+
+                                return false;
+                            },
+                            onExit: () => {
+                                popup?.destroy();
+                                root?.unmount();
+                                element?.remove();
+                            },
+                        };
+                    },
+                },
+            }),
+        ],
+        content: EMPTY_DOC,
+        editable: editable && provider?.wsconnected,
+        onCreate: () => {
+            if (provider?.wsconnected && provider?.synced) {
+                if (!isContentLoaded) {
                     loadContent();
                 }
-            },
-            onUpdate: ({ editor }) => {
-                if (!provider?.wsconnected || !isContentLoaded) return;
+            }
+        },
+        onUpdate: ({ editor }) => {
+            if (!provider?.wsconnected || !isContentLoaded) return;
 
+            if (isInitialLoad.current) {
                 isInitialLoad.current = false;
+                return;
+            }
 
-                const content = editor.getJSON();
-                if (content.content?.length > 0) {
-                    debouncedSave(content);
-                }
-            },
-            editorProps: {
-                handleClick: (view, pos, event) => {
-                    const target = event.target as HTMLElement;
-                    if (target.hasAttribute('data-type') && target.hasAttribute('data-id')) {
-                        const type = target.getAttribute('data-type') as 'user' | 'task';
-                        const id = target.getAttribute('data-id');
-                        if (id && onMentionClick) {
-                            onMentionClick(type, id);
-                        }
-                        return true;
+            const content = editor.getJSON();
+            if (content.content?.length > 0) {
+                debouncedSave(content);
+            }
+        },
+        editorProps: {
+            handleClick: (view, pos, event) => {
+                const target = event.target as HTMLElement;
+                if (target.hasAttribute('data-type') && target.hasAttribute('data-id')) {
+                    const type = target.getAttribute('data-type') as 'user' | 'task';
+                    const id = target.getAttribute('data-id');
+                    if (id && onMentionClick) {
+                        onMentionClick(type, id);
                     }
-                    return false;
-                },
-                // handleKeyDown: (view, event) => {
-                //     // Check if we have an active suggestion
-                //     const userSuggestion = userMentionPluginKey.getState(view.state);
-                //     const taskSuggestion = taskMentionPluginKey.getState(view.state);
-                //     const slashCommandsState = view.state.plugins.find(plugin => plugin.key?.toString() === 'slashCommands')?.getState(view.state);
-
-                //     // If any suggestion or command menu is active, let the suggestion handler deal with it
-                //     if ((userSuggestion && userSuggestion.active) ||
-                //         (taskSuggestion && taskSuggestion.active) ||
-                //         slashCommandsState) {
-                //         return false; // Return false to let the suggestion handler handle the event
-                //     }
-
-                //     return false;
-                // },
+                    return true;
+                }
+                return false;
             },
+        },
+    }), [ydoc, provider, section, currentUserId, editable, isContentLoaded, participants, onMentionClick]);
 
-        });
-
+    // Initialize editor with memoized configuration
+    useEffect(() => {
+        const editor = new Editor(editorConfig);
         editorRef.current = editor;
 
         return () => {
             editor.destroy();
         };
-    }, [provider, ydoc, section, currentUserId, participants, editable, tasks]);
+    }, [editorConfig]);
 
     // Update editor state when provider connection changes
     useEffect(() => {
@@ -1029,18 +1042,6 @@ export function RealtimeNoteEditor({
         if (!editorRef.current || !provider || !ydoc) return;
 
         try {
-            // const ytext = ydoc.get(section, Y.XmlFragment);
-
-            // const observer = () => {
-            //     console.log('[YJS] Text updated:', {
-            //         section,
-            //         connected: provider.wsconnected,
-            //         synced: provider.synced
-            //     });
-            // };
-
-            // ytext.observe(observer);
-
             const handleSync = (isSynced: boolean) => {
                 if (isSynced && !hasLoadedFromDB.current) {
                     hasLoadedFromDB.current = true;
@@ -1056,7 +1057,6 @@ export function RealtimeNoteEditor({
             }
 
             return () => {
-                // ytext.unobserve(observer);
                 provider.off('sync', handleSync);
                 hasLoadedFromDB.current = false;
             };
@@ -1065,115 +1065,161 @@ export function RealtimeNoteEditor({
         }
     }, [editorRef.current, provider, ydoc, section]);
 
-    // Handle task creation
-    const handleTaskCreate = (task: Task) => {
-        if (editorRef.current && commandRange) {
-            // Delete the slash command text first
-            editorRef.current.chain().focus().deleteRange({
-                from: commandRange.from,
-                to: commandRange.to
-            }).run();
-
-            // Insert task mention at the command range position
-            editorRef.current.chain()
-                .focus()
-                .insertContentAt(commandRange.from, [{
-                    type: 'taskMention',
-                    attrs: {
-                        id: String(task.id),
-                        label: `${task.team_ref_number} ${task.title}`,
-                        type: 'task'
-                    }
-                }])
-                .run();
-
-            // Clear command range
-            setCommandRange(null);
+    // Memoize task creation handler
+    const handleTaskCreate = useCallback(async (task: Task) => {
+        if (!editorRef.current || !provider?.wsconnected) {
+            console.error('[Task Creation] Editor not ready or provider not connected');
+            return;
         }
 
-        // Close modal
-        setShowTaskModal(false);
+        try {
+            // Store the current editor state and view
+            const { state, view } = editorRef.current;
+            const { from } = state.selection;
 
-        // Update tasks list immediately
-        if (tasks) {
-            const updatedTasks = [...tasks];
-            const existingIndex = updatedTasks.findIndex(t => t.id === task.id);
-            if (existingIndex >= 0) {
-                updatedTasks[existingIndex] = task;
-            } else {
-                updatedTasks.push(task);
+            console.log('[Task Creation] Creating task:', task.title);
+
+            // Create the task first and wait for it to complete
+            const newTask = await createTask({
+                title: task.title,
+                description: task.description || '',
+                status: task.status,
+                priority: task.priority,
+                type: task.type,
+                team: { id: teamId, name: '' },
+                start_date: null,
+                due_date: null,
+                assignee_id: null,
+                labels: [],
+                category: 'GENERAL'
+            });
+
+            console.log('[Task Creation] Task created:', newTask);
+
+            if (!newTask || !newTask.id) {
+                throw new Error('Task creation failed or returned invalid data');
             }
-            prevTasksRef.current = updatedTasks;
-        }
 
-        // Call onTaskCreate to update parent's task list
-        if (onTaskCreate) {
-            onTaskCreate(task);
+            // Update local tasks reference without triggering re-render
+            if (tasksRef.current) {
+                const updatedTasks = [...tasksRef.current];
+                const existingIndex = updatedTasks.findIndex(t => t.id === Number(newTask.id));
+                if (existingIndex >= 0) {
+                    updatedTasks[existingIndex] = {
+                        id: Number(newTask.id),
+                        title: newTask.title,
+                        team_ref_number: newTask.team_ref_number || ''
+                    };
+                } else {
+                    updatedTasks.push({
+                        id: Number(newTask.id),
+                        title: newTask.title,
+                        team_ref_number: newTask.team_ref_number || ''
+                    });
+                }
+                tasksRef.current = updatedTasks;
+            }
+
+            // Ensure we're still connected and have the document
+            if (!provider.doc) {
+                throw new Error('Provider document not available');
+            }
+
+            console.log('[Task Creation] Inserting mention at position:', from);
+
+            // Create the task mention node
+            const mentionNode = state.schema.nodes.taskMention.create({
+                id: String(newTask.id),
+                label: `${newTask.team_ref_number} ${newTask.title}`,
+                type: 'task'
+            });
+
+            // Use a Yjs transaction to ensure synchronization
+            provider.doc.transact(() => {
+                // Insert the mention node at the stored position
+                const tr = view.state.tr.insert(from, mentionNode);
+
+                // Preserve selection after insertion
+                const newPos = from + 1;
+                tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newPos)));
+
+                view.dispatch(tr);
+                view.focus();
+            });
+
+            console.log('[Task Creation] Mention inserted successfully');
+
+            // Close the task modal
+            setShowQuickTaskModal(false);
+
+        } catch (error) {
+            console.error('[Task Creation] Error:', error);
+            toast({
+                title: "Error creating task",
+                description: "Failed to create task. Please try again.",
+                variant: "destructive"
+            });
         }
-    };
+    }, [provider, teamId, createTask, toast]);
 
     return (
-        <div className="rounded-lg border bg-card text-card-foreground shadow-sm h-full flex flex-col">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/50">
-                <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-medium tracking-tight">
-                        {sectionTitle}
-                    </h3>
-                    {!editable && (
-                        <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                            View only
-                        </span>
-                    )}
+        <>
+            <div className="rounded-lg border bg-card text-card-foreground shadow-sm h-full flex flex-col">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/50">
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-medium tracking-tight">
+                            {sectionTitle}
+                        </h3>
+                        {!editable && (
+                            <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                                View only
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center space-x-2 min-w-[60px] justify-end">
+                        {showSaving && (
+                            <span
+                                className={`text-xs flex items-center transition-opacity duration-500
+                                    ${saveStatus === 'saving' ? 'opacity-100' :
+                                        saveStatus === 'saved' ? 'opacity-100' :
+                                            'opacity-0'}`}
+                            >
+                                {saveStatus === 'saving' ? (
+                                    <>
+                                        <svg className="animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                        <span className="text-muted-foreground">Saving...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="h-3 w-3 mr-1 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span className="text-green-600">Saved</span>
+                                    </>
+                                )}
+                            </span>
+                        )}
+                    </div>
                 </div>
-                <div className="flex items-center space-x-2 min-w-[60px] justify-end">
-                    {showSaving && (
-                        <span
-                            className={`text-xs flex items-center transition-opacity duration-500
-                                ${saveStatus === 'saving' ? 'opacity-100' :
-                                    saveStatus === 'saved' ? 'opacity-100' :
-                                        'opacity-0'}`}
-                        >
-                            {saveStatus === 'saving' ? (
-                                <>
-                                    <svg className="animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                    <span className="text-muted-foreground">Saving...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="h-3 w-3 mr-1 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    <span className="text-green-600">Saved</span>
-                                </>
-                            )}
-                        </span>
-                    )}
+                <div className="flex-1 p-3 relative min-h-[150px]">
+                    <EditorContent
+                        editor={editorRef.current}
+                        className={`prose prose-sm max-w-none focus:outline-none ${!editable ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        data-placeholder={`Add your ${sectionTitle.toLowerCase()} notes here...`}
+                    />
                 </div>
-            </div>
-            <div className="flex-1 p-3 relative min-h-[150px]">
-                <EditorContent
-                    key={editorKey}
-                    editor={editorRef.current}
-                    className={`prose prose-sm max-w-none focus:outline-none ${!editable ? 'opacity-75 cursor-not-allowed' : ''}`}
-                    data-placeholder={`Add your ${sectionTitle.toLowerCase()} notes here...`}
-                />
             </div>
 
-            {showTaskModal && (
-                <TaskDetail
-                    isOpen={showTaskModal}
-                    onClose={() => {
-                        setShowTaskModal(false);
-                        setCommandRange(null); // Clear command range if modal is closed without creating task
-                    }}
-                    task={undefined}
-                    teamId={teamId}
-                    onTaskUpdate={handleTaskDetailUpdate}
-                />
-            )}
-        </div>
+            <QuickTaskModal
+                isOpen={showQuickTaskModal}
+                onClose={() => setShowQuickTaskModal(false)}
+                onTaskCreate={handleTaskCreate}
+                teamId={teamId}
+                initialTitle={taskInitialTitle}
+            />
+        </>
     );
 }

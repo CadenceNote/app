@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { meetingApi } from '@/services/meetingApi';
 import { useToast } from '@/hooks/use-toast';
+import { TeamRole } from '@/lib/types/team';
 
 interface MeetingHeaderProps {
     teamId: string;
@@ -22,10 +23,10 @@ interface MeetingHeaderProps {
     lastSaved?: Date | null;
     isSaving?: boolean;
     participants?: Array<{
-        id: number;
+        id: string;
         email: string;
         full_name: string;
-        role?: string;
+        role?: TeamRole;
     }>;
     canEdit?: boolean;
     onUpdate?: () => void;
@@ -221,17 +222,6 @@ export function MeetingHeader({
                             <div className="flex items-center gap-3">
                                 <Button
                                     size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                        const baseUrl = `/dashboard/${teamId}/meetings/${meetingId}`;
-                                        window.location.href = isDemoMode ? baseUrl : `${baseUrl}/demo`;
-                                    }}
-                                    className="h-8 px-3 text-[14px] font-medium"
-                                >
-                                    {isDemoMode ? "Old View" : "Switch to Realtime (Beta)"}
-                                </Button>
-                                <Button
-                                    size="sm"
                                     onClick={onCreateMeeting}
                                     className="h-8 px-3 text-[14px] font-medium"
                                 >
@@ -252,7 +242,7 @@ export function MeetingHeader({
                 currentParticipants={participants}
                 onParticipantsUpdate={() => {
                     // Refresh meeting data
-                    window.location.reload();
+                    onUpdate?.();
                 }}
             />
         </>
