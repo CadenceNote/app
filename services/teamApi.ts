@@ -17,14 +17,17 @@ interface TeamMemberFromDB {
 
 export const teamApi = {
     // Get all teams for the current user
-    getUserTeams: async (): Promise<Team[]> => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return [];
+    getUserTeams: async (userId: string = ''): Promise<Team[]> => {
+        if (!userId) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return [];
+            userId = user.id;
+        }
 
         const { data: teamMemberships, error: membershipError } = await supabase
             .from('team_members')
             .select('team_id')
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
         if (membershipError) {

@@ -1,27 +1,55 @@
 import { Bird } from "../common/Bird";
+import { BirdAvatar } from "../common/BirdAvatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Send, Sparkles } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { useUser } from "@/hooks/useUser";
+import { useTeams } from "@/hooks/useTeams";
+import { useTask } from "@/hooks/useTask";
+import { useMeeting } from "@/hooks/useMeeting";
+import { Loader2 } from "lucide-react";
+import { UserAvatar } from "../common/UserAvatar";
 
 interface Message {
     type: 'user' | 'ai';
     content: string;
     isTyping?: boolean;
+    data?: {
+        summary?: string;
+        insights?: string[];
+        recommendations?: string[];
+    };
 }
 
-export default function AIAssistant() {
+interface APIError {
+    error: string;
+    message: string;
+}
+
+interface AIAssistantProps {
+    teamId?: number;
+}
+
+export default function AIAssistant({ teamId = -1 }: AIAssistantProps) {
+    const { user } = useUser();
+    const { teams } = useTeams();
+    const { tasks } = useTask(teamId === -1 ? undefined : teamId);
+    const { meetings } = useMeeting(teamId === -1 ? undefined : teamId);
+
     const [messages, setMessages] = useState<Message[]>([
-        { type: 'ai', content: "Hi! I'm your AI assistant. I can help you manage your tasks, analyze your schedule, and provide insights about your work. What would you like to know?" }
+        {
+            type: 'ai',
+            content: "Hi! I'm your AI assistant. I can help you manage your tasks, analyze your schedule, and provide insights about your work. What would you like to know?"
+        }
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isAiResponding, setIsAiResponding] = useState(false);
 
-    const simulateTyping = useCallback((text: string) => {
+    const simulateTyping = useCallback((text: string, data?: Message['data']) => {
         return new Promise<void>((resolve) => {
             setIsAiResponding(true);
-            // Add a temporary message that will be updated character by character
-            setMessages(prev => [...prev, { type: 'ai', content: '', isTyping: true }]);
+            setMessages(prev => [...prev, { type: 'ai', content: '', isTyping: true, data }]);
 
             let currentText = '';
             const words = text.split(' ');
@@ -32,38 +60,120 @@ export default function AIAssistant() {
                     currentText += (wordIndex > 0 ? ' ' : '') + words[wordIndex];
                     setMessages(prev => [
                         ...prev.slice(0, -1),
-                        { type: 'ai', content: currentText, isTyping: true }
+                        { type: 'ai', content: currentText, isTyping: true, data }
                     ]);
                     wordIndex++;
-                    setTimeout(typeWord, Math.random() * 50 + 50); // Random delay between words
+                    setTimeout(typeWord, Math.random() * 50 + 50);
                 } else {
                     setMessages(prev => [
                         ...prev.slice(0, -1),
-                        { type: 'ai', content: currentText, isTyping: false }
+                        { type: 'ai', content: currentText, isTyping: false, data }
                     ]);
                     setIsAiResponding(false);
                     resolve();
                 }
             };
 
-            setTimeout(typeWord, 500); // Initial delay before starting to type
+            setTimeout(typeWord, 500);
         });
     }, []);
 
     const handleSend = async () => {
-        if (!inputValue.trim() || isAiResponding) return;
+        if (!inputValue.trim() || isAiResponding || !user?.id || !teams) return;
 
-        // Add user message
-        setMessages(prev => [...prev, { type: 'user', content: inputValue }]);
+        const userMessage = inputValue.trim();
+        setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
         setInputValue('');
+        setIsAiResponding(true);
 
-        // Simulate AI response with typing effect
-        const response = "(placeholder) I'm analyzing your schedule and tasks. Based on your current workload, you have 3 high-priority tasks due this week and 2 upcoming meetings. Would you like me to help you prioritize these or provide more detailed insights about specific items?";
-        await simulateTyping(response);
+        try {
+            // Get all tasks and meetings for the specified team or all teams
+            const relevantTeams = teamId === -1 ? teams : teams.filter(t => t.id === teamId);
+
+            console.log('Teams found:', {
+                total: teams.length,
+                relevant: relevantTeams.length,
+                teamId: teamId === -1 ? 'all' : teamId
+            });
+
+            // Don't filter by date, include all tasks
+            const filteredTasks = tasks?.map(task => ({
+                id: task.id,
+                title: task.title,
+                description: task.description,
+                status: task.status,
+                priority: task.priority,
+                due_date: task.due_date,
+                team: teams.find(t => t.id === task.team_id)?.name
+            }));
+
+            // Include all meetings, not just future ones
+            const filteredMeetings = meetings?.map(meeting => ({
+                id: meeting.id,
+                title: meeting.title,
+                description: meeting.description,
+                start_time: meeting.start_time,
+                team: teams.find(t => t.id === meeting.team_id)?.name
+            }));
+
+            console.log('Data prepared for AI:', {
+                tasks: {
+                    total: tasks?.length ?? 0,
+                    filtered: filteredTasks?.length ?? 0,
+                    teams: [...new Set(tasks?.map(t => t.team_id))]
+                },
+                meetings: {
+                    total: meetings?.length ?? 0,
+                    filtered: filteredMeetings?.length ?? 0,
+                    teams: [...new Set(meetings?.map(m => m.team_id))]
+                },
+                teams: relevantTeams.map(t => t.name)
+            });
+
+            const response = await fetch('/api/openai', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: user.id,
+                    message: userMessage,
+                    data: {
+                        tasks: filteredTasks || [],
+                        meetings: filteredMeetings || [],
+                        teams: relevantTeams
+                    }
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                const error = data as APIError;
+                throw new Error(error.message || 'Failed to get AI response');
+            }
+
+            // For structured responses, use a brief intro message
+            let formattedResponse = "Here's my analysis:";
+
+            // Pass the structured data separately
+            await simulateTyping(formattedResponse, {
+                summary: data.summary,
+                insights: data.insights,
+                recommendations: data.recommendations
+            });
+
+        } catch (error) {
+            console.error('Error:', error);
+            const errorMessage = error instanceof Error ? error.message : "I apologize, but I encountered an error while processing your request. Please try again.";
+            await simulateTyping(errorMessage);
+        } finally {
+            setIsAiResponding(false);
+        }
     };
 
     return (
-        <Card className="border-indigo-100 bg-white/70 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
+        <Card className="border-indigo-100 bg-white/70 dark:bg-black/70 dark:border-indigo-900 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
             <CardHeader>
                 <div className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5" />
@@ -71,34 +181,85 @@ export default function AIAssistant() {
                 </div>
                 <CardDescription>Get personalized insights and recommendations for your work.</CardDescription>
             </CardHeader>
-            <CardContent className="relative">
-                {/* Bird Avatar */}
-                <div className="absolute left-4 top-0">
-                    <Bird className="transform scale-75" />
-                </div>
-
+            <CardContent>
                 {/* Chat Container */}
-                <div className="ml-20 space-y-4">
+                <div className="space-y-4">
                     {/* Messages */}
                     <div className="space-y-4 max-h-[300px] overflow-y-auto pr-4">
                         {messages.map((message, index) => (
                             <div
                                 key={index}
-                                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                                className={`flex items-start gap-2 ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                             >
-                                <div
-                                    className={`rounded-2xl px-4 py-2 max-w-[80%] ${message.type === 'user'
-                                        ? 'bg-primary text-white'
-                                        : 'bg-indigo-400 text-white'
-                                        }`}
-                                >
-                                    <p className="text-sm whitespace-pre-wrap">
-                                        {message.content}
-                                        {message.isTyping && (
-                                            <span className="inline-block ml-1 animate-pulse">▋</span>
+                                {/* Avatar */}
+                                {message.type === 'user' ? (
+                                    <UserAvatar
+                                        userId={user?.id}
+                                        name={user?.full_name || user?.email || 'User'}
+                                        imageUrl={user?.avatar_url}
+                                        className="h-8 w-8 flex-shrink-0"
+                                    />
+                                ) : (
+                                    <BirdAvatar />
+                                )}
+
+                                {/* Message Content */}
+                                {message.type === 'ai' && message.data ? (
+                                    <div className="flex-1 space-y-4">
+                                        {/* Summary Card */}
+                                        {message.data.summary && (
+                                            <div className="bg-white rounded-lg shadow-sm p-4 border border-indigo-100">
+                                                <h4 className="font-medium text-indigo-900 mb-2">Summary</h4>
+                                                <p className="text-gray-700 text-sm">{message.data.summary}</p>
+                                            </div>
                                         )}
-                                    </p>
-                                </div>
+
+                                        {/* Insights Card */}
+                                        {message.data.insights && message.data.insights.length > 0 && (
+                                            <div className="bg-white rounded-lg shadow-sm p-4 border border-indigo-100">
+                                                <h4 className="font-medium text-indigo-900 mb-2">Key Insights</h4>
+                                                <ul className="space-y-2">
+                                                    {message.data.insights.map((insight, i) => (
+                                                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                                                            <span className="text-indigo-500 mt-1">•</span>
+                                                            <span>{insight}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        {/* Recommendations Card */}
+                                        {message.data.recommendations && message.data.recommendations.length > 0 && (
+                                            <div className="bg-white rounded-lg shadow-sm p-4 border border-indigo-100">
+                                                <h4 className="font-medium text-indigo-900 mb-2">Recommendations</h4>
+                                                <ul className="space-y-2">
+                                                    {message.data.recommendations.map((rec, i) => (
+                                                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                                                            <span className="text-indigo-500 mt-1">•</span>
+                                                            <span>{rec}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div
+                                        className={`rounded-2xl px-4 py-3 max-w-[80%] ${message.type === 'user'
+                                            ? 'bg-primary text-white rounded-tr-none ml-auto'
+                                            : 'bg-indigo-400 text-white rounded-tl-none mr-auto'
+                                            }`}
+                                    >
+                                        <p className={`text-sm 
+                                            }`}>
+                                            {message.content}
+                                            {message.isTyping && (
+                                                <span className="inline-block ml-1 animate-pulse text-indigo-500">▋</span>
+                                            )}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -119,7 +280,11 @@ export default function AIAssistant() {
                             className="rounded-full"
                             disabled={!inputValue.trim() || isAiResponding}
                         >
-                            <Send className="h-4 w-4" />
+                            {isAiResponding ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Send className="h-4 w-4" />
+                            )}
                         </Button>
                     </div>
                 </div>

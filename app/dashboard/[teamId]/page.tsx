@@ -7,7 +7,7 @@
 "use client"
 
 import { use } from "react"
-import TeamAIAssistant from "@/components/team_dashboard/TeamAIAssistant"
+import AIAssistant from "@/components/personal_dashboard/AIAssistant"
 import TeamStats from "@/components/team_dashboard/TeamStats"
 import TeamAlerts from "@/components/team_dashboard/TeamAlerts"
 import TeamEvents from "@/components/team_dashboard/TeamEvents"
@@ -38,7 +38,7 @@ export default function TeamDashboard({ params }: { params: Promise<{ teamId: st
                 <div className="grid lg:grid-cols-3 gap-6">
                     {/* Main Content - First Two Columns */}
                     <div className="lg:col-span-2 space-y-6">
-                        <TeamAIAssistant teamId={teamId} />
+                        <AIAssistant teamId={teamId} />
 
                         <div className="border rounded-lg bg-white/70 backdrop-blur-sm">
                             <TeamTasks searchTerm={searchTerm} teamId={teamId} />
