@@ -65,13 +65,13 @@ export default function DashboardPage() {
             <Suspense fallback={<h3 className="text-center text-2xl font-bold">Loading...</h3>}>
                 <main className="h-full overflow-y-auto">
                     {/* Top Navigation Bar */}
-                    <div className="bg-white border-b">
+                    <div className="border-b ">
                         <div className="flex items-center h-14 px-4">
                             {/* Left section */}
                             <div className="flex-none flex items-center space-x-4">
                                 <SidebarTrigger />
                                 <Separator orientation="vertical" className="h-6" />
-                                <h1 className="text-xl font-semibold text-gray-700">My Dashboard</h1>
+                                <h1 className="text-xl font-semibold text-gray-700 dark:text-gray-200">My Dashboard</h1>
                             </div>
 
                             {/* Center section - Search */}
@@ -82,7 +82,7 @@ export default function DashboardPage() {
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         placeholder="Search..."
-                                        className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        className="w-full px-3 py-2 border dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400"
                                     />
                                 </div>
                             </div>
@@ -116,38 +116,38 @@ export default function DashboardPage() {
 
                     {/* Dashboard Content */}
                     <div className="w-full mx-auto px-4 sm:px-6 lg:px-40 py-6 space-y-6">
-                        <h1 className="text-3xl font-bold tracking-tight"> My Dashboard</h1>
+                        <h1 className="text-3xl font-bold tracking-tight dark:text-white"> My Dashboard</h1>
                         <div className="space-y-6" id="summary-section">
                             {/* Quick Stats Row */}
                             <div className="grid gap-6 md:grid-cols-4">
-                                <Card>
+                                <Card className="">
                                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                                        <CardTitle className="text-sm font-medium">Tasks Due Today</CardTitle>
-                                        <Badge variant="secondary">
+                                        <CardTitle className="text-sm font-medium dark:text-gray-200">Tasks Due Today</CardTitle>
+                                        <Badge variant="secondary" className="dark:bg-gray-700 dark:text-gray-200">
                                             {tasks?.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length || 0}
                                         </Badge>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="text-2xl font-bold">
+                                        <div className="text-2xl font-bold dark:text-white">
                                             {tasks?.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length || 0}
                                         </div>
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-xs text-muted-foreground dark:text-gray-400">
                                             {tasks?.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString() && t.priority === 'HIGH').length || 0} high priority
                                         </p>
                                     </CardContent>
                                 </Card>
-                                <Card>
+                                <Card className="">
                                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                                        <CardTitle className="text-sm font-medium">Today&apos;s Meetings</CardTitle>
-                                        <Badge variant="secondary">
+                                        <CardTitle className="text-sm font-medium dark:text-gray-200">Today&apos;s Meetings</CardTitle>
+                                        <Badge variant="secondary" className="dark:bg-gray-700 dark:text-gray-200">
                                             {meetings?.filter(m => new Date(m.start_time).toDateString() === new Date().toDateString()).length || 0}
                                         </Badge>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="text-2xl font-bold">
+                                        <div className="text-2xl font-bold dark:text-white">
                                             {meetings?.filter(m => new Date(m.start_time).toDateString() === new Date().toDateString()).length || 0}
                                         </div>
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-xs text-muted-foreground dark:text-gray-400">
                                             Next at {meetings
                                                 ?.filter(m => new Date(m.start_time) > new Date())
                                                 .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0]
@@ -159,34 +159,34 @@ export default function DashboardPage() {
                                         </p>
                                     </CardContent>
                                 </Card>
-                                <Card>
+                                <Card className="">
                                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                                        <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
-                                        <Badge variant="secondary">
+                                        <CardTitle className="text-sm font-medium dark:text-gray-200">Pending Tasks</CardTitle>
+                                        <Badge variant="secondary" className="dark:bg-gray-700 dark:text-gray-200">
                                             {tasks?.filter(t => t.status === 'IN_PROGRESS').length || 0}
                                         </Badge>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="text-2xl font-bold">
+                                        <div className="text-2xl font-bold dark:text-white">
                                             {tasks?.filter(t => t.status === 'IN_PROGRESS').length || 0}
                                         </div>
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-xs text-muted-foreground dark:text-gray-400">
                                             {tasks?.filter(t => t.status === 'IN_PROGRESS' && t.priority === 'HIGH').length || 0} high priority
                                         </p>
                                     </CardContent>
                                 </Card>
-                                <Card>
+                                <Card className="">
                                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                                        <CardTitle className="text-sm font-medium">Todo Tasks</CardTitle>
-                                        <Badge variant="secondary">
+                                        <CardTitle className="text-sm font-medium dark:text-gray-200">Todo Tasks</CardTitle>
+                                        <Badge variant="secondary" className="dark:bg-gray-700 dark:text-gray-200">
                                             {tasks?.filter(t => t.status === 'TODO').length || 0}
                                         </Badge>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="text-2xl font-bold">
+                                        <div className="text-2xl font-bold dark:text-white">
                                             {tasks?.filter(t => t.status === 'TODO').length || 0}
                                         </div>
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-xs text-muted-foreground dark:text-gray-400">
                                             {tasks?.filter(t =>
                                                 t.status === 'TODO' &&
                                                 t.due_date &&

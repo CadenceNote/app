@@ -23,11 +23,11 @@ export default function TeamHeader({ searchTerm, setSearchTerm, teamId }: TeamHe
     const router = useRouter()
 
     return (
-        <header className="bg-white/80 backdrop-blur-xl border-b border-indigo-100 p-4 sticky top-0 z-50 flex justify-between items-center shadow-sm">
+        <header className="backdrop-blur-xl border-b border-indigo-100 dark:border-indigo-900 p-4 sticky top-0 z-50 flex justify-between items-center shadow-sm">
             <div className="flex items-center space-x-4">
                 <SidebarTrigger />
                 <Separator orientation="vertical" className="h-6" />
-                <h1 className="text-2xl font-semibold text-indigo-900">
+                <h1 className="text-2xl font-semibold text-indigo-900 dark:text-indigo-100">
                     {currentTeam?.name || 'Loading...'}
                 </h1>
             </div>
@@ -36,7 +36,7 @@ export default function TeamHeader({ searchTerm, setSearchTerm, teamId }: TeamHe
                 <Input
                     type="search"
                     placeholder="Search tasks or meetings..."
-                    className="w-64"
+                    className="w-64 bg-white/50 dark:bg-gray-800/50"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />

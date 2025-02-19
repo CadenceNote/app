@@ -164,48 +164,49 @@ export default function PMeeting() {
     };
 
     const MeetingCard = ({ meeting }: { meeting: Meeting }) => {
-        const team = teams.find(t => t.id === meeting.team_id);
+        const team = teams?.find(t => t.id === meeting.team_id);
         const meetingTime = format(parseISO(meeting.start_time), 'h:mm a');
         const meetingDate = format(parseISO(meeting.start_time), 'MMM d, yyyy');
 
         return (
             <div
-                className="relative group rounded-lg border bg-white hover:shadow-md transition-all duration-200 cursor-pointer"
+                className="relative group rounded-lg border hover:shadow-md transition-all duration-200 cursor-pointer"
                 onClick={() => setSelectedMeetingForDetail(meeting)}
             >
                 <div className="p-4">
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between">
-                            <h3 className="font-medium text-lg group-hover:text-indigo-600 transition-colors">
+                            <h3 className="font-medium text-lg group-hover:text-indigo-600 dark:text-gray-100 dark:group-hover:text-indigo-400 transition-colors">
                                 {meeting.title}
                             </h3>
                             <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground dark:text-gray-400">
                                     <CalendarIcon className="h-4 w-4" />
                                     {meetingDate},
-                                    <span className="">
+                                    <span className="dark:text-gray-300">
                                         {meetingTime}
                                     </span>
                                 </div>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-transparent">
-                                            <MoreVertical className="h-4 w-4" />
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-transparent dark:hover:bg-gray-700">
+                                            <MoreVertical className="h-4 w-4 dark:text-gray-400" />
                                         </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuContent align="end" className="dark:bg-gray-800 dark:border-gray-700">
                                         <DropdownMenuItem
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setSelectedMeeting(meeting);
                                                 setIsParticipantsModalOpen(true);
                                             }}
+                                            className="dark:text-gray-300 dark:hover:bg-gray-700"
                                         >
                                             <UserPlus className="h-4 w-4 mr-2" />
                                             Manage Participants
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
-                                            className="text-destructive focus:text-destructive"
+                                            className="text-destructive focus:text-destructive dark:text-red-400 dark:hover:bg-gray-700"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleDeleteMeeting(meeting.id);
@@ -220,42 +221,42 @@ export default function PMeeting() {
                         </div>
                         <div className="flex items-center gap-2">
                             {team && (
-                                <span className="text-sm text-muted-foreground">
+                                <span className="text-sm text-muted-foreground dark:text-gray-400">
                                     {team.name}
                                 </span>
                             )}
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-sm text-muted-foreground dark:text-gray-400">
                                 • {meeting.duration_minutes} min
                             </span>
                         </div>
                         {meeting.description && (
-                            <p className="text-sm text-muted-foreground line-clamp-2">
+                            <p className="text-sm text-muted-foreground dark:text-gray-400 line-clamp-2">
                                 {meeting.description}
                             </p>
                         )}
-                        <div className="pt-3 border-t flex items-center justify-between">
+                        <div className="pt-3 border-t dark:border-gray-700 flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4 text-muted-foreground" />
+                                <Users className="h-4 w-4 text-muted-foreground dark:text-gray-400" />
                                 <div className="flex -space-x-2">
                                     {meeting.participants.slice(0, 3).map((participant, i) => (
                                         <UserAvatar
                                             key={i}
                                             userId={participant.id.toString()}
                                             name={participant.full_name || 'Unknown'}
-                                            className="h-6 w-6 border-2 border-background"
+                                            className="h-6 w-6 border-2 border-background dark:border-gray-800"
                                         />
                                     ))}
                                     {meeting.participants.length > 3 && (
-                                        <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs border-2 border-background">
+                                        <div className="h-6 w-6 rounded-full bg-muted dark:bg-gray-700 flex items-center justify-center text-xs border-2 border-background dark:border-gray-800 dark:text-gray-300">
                                             +{meeting.participants.length - 3}
                                         </div>
                                     )}
                                 </div>
-                                <span className="text-xs text-muted-foreground ml-1">
+                                <span className="text-xs text-muted-foreground dark:text-gray-400 ml-1">
                                     {meeting.participants.length} {meeting.participants.length === 1 ? 'participant' : 'participants'}
                                 </span>
                             </div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-xs text-muted-foreground dark:text-gray-400">
                                 Click to view details
                             </div>
                         </div>

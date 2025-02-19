@@ -5,20 +5,32 @@ import { JetBrains_Mono } from 'next/font/google'
 import Link from 'next/link'
 import { useSidebar } from '@/components/ui/sidebar'
 import Image from 'next/image'
+import { useTheme } from 'next-themes'
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'] })
 
 export function StaticLogo({ showText = true }: { showText?: boolean }) {
+    const { theme } = useTheme()
+    const isDark = theme === 'dark'
+
     return (
         <Link href="/" className={`flex items-center gap-3 text-xl font-bold text-foreground hover:text-foreground/80 ${jetbrainsMono.className}`}>
             {showText && (
-                <Image src={'/logo_text.svg'} width={100} height={0} alt="Agilee" />
-
-                // <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
-                //     Agilee
-                // </span>
+                <Image
+                    src={isDark ? '/logo_text_dark.svg' : '/logo_text.svg'}
+                    width={100}
+                    height={0}
+                    alt="Agilee"
+                    className="transition-opacity duration-300"
+                />
             )}
             {!showText && (
-                <Image src={'/logo.svg'} width={20} height={20} alt="Agilee" />
+                <Image
+                    src={'/logo.svg'}
+                    width={20}
+                    height={20}
+                    alt="Agilee"
+                    className="transition-opacity duration-300"
+                />
             )}
         </Link>
     )

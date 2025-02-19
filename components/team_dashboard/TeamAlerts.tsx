@@ -50,9 +50,9 @@ export default function TeamAlerts({ teamId }: TeamAlertsProps) {
     const [alerts, setAlerts] = useState<Alert[]>(placeholderAlerts)
 
     return (
-        <Card className="border-indigo-100 bg-white/70 backdrop-blur-sm h-full hover:shadow-lg transition-all duration-300">
+        <Card className="backdrop-blur-sm h-full hover:shadow-lg transition-all duration-300">
             <CardHeader>
-                <CardTitle className="text-indigo-800">Recent Updates</CardTitle>
+                <CardTitle className="">Recent Updates</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
@@ -62,15 +62,15 @@ export default function TeamAlerts({ teamId }: TeamAlertsProps) {
                                 key={alert.id}
                                 className={cn(
                                     "flex items-center space-x-4 rounded-lg border p-4 transition-all duration-300",
-                                    !alert.isRead ? "bg-indigo-50/50 border-indigo-200" : "hover:bg-gray-50/50"
+                                    !alert.isRead ? "bg-indigo-50/50 border-indigo-200 dark:bg-gray-800 dark:border-gray-700" : "hover:bg-gray-50/50 dark:hover:bg-gray-800/50"
                                 )}
                             >
                                 <div className={cn(
                                     "rounded-full p-2",
-                                    alert.type === 'meeting_invite' && "bg-blue-100",
-                                    alert.type === 'task_assignment' && "bg-green-100",
-                                    alert.type === 'team_invite' && "bg-purple-100",
-                                    alert.type === 'mention' && "bg-yellow-100"
+                                    alert.type === 'meeting_invite' && "bg-blue-100 dark:bg-gray-800",
+                                    alert.type === 'task_assignment' && "bg-green-100 dark:bg-gray-800",
+                                    alert.type === 'team_invite' && "bg-purple-100 dark:bg-gray-800",
+                                    alert.type === 'mention' && "bg-yellow-100 dark:bg-gray-800"
                                 )}>
                                     {alert.type === 'meeting_invite' && <CalendarIcon className="h-4 w-4 text-blue-600" />}
                                     {alert.type === 'task_assignment' && <CheckCircle className="h-4 w-4 text-green-600" />}
