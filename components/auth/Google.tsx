@@ -80,7 +80,7 @@ export const OneTapComponent: React.FC<OneTapComponentProps> = ({ onSuccess, onE
             if (sessionData.session) {
                 const user = await userApi.getCurrentUser()
                 if (!user || !user.full_name) {
-                    router.push('/auth/callback')
+                    router.push('/auth/ ')
                     return
                 }
                 router.push('/dashboard')

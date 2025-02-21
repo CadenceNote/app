@@ -1,6 +1,7 @@
 import { Metadata } from "next"
 import { SignUpForm } from "@/components/signup-form"
-import { StaticLogo } from "@/components/common/Logo"
+import Image from "next/image"
+import Link from "next/link"
 
 export const metadata: Metadata = {
     title: "Sign Up",
@@ -13,7 +14,15 @@ export default function SignUpPage() {
             <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
                 <div className="absolute inset-0 bg-zinc-900" />
                 <div className="relative z-20 flex items-center text-lg font-medium">
-                    <StaticLogo />
+                    <Link href="/">
+                        <Image
+                            src={'/logo_white_text.svg'}
+                            width={90}
+                            height={0}
+                            alt="Agilee"
+                            className="transition-opacity duration-300"
+                        />
+                    </Link>
                 </div>
                 <div className="relative z-20 mt-auto">
                     <blockquote className="space-y-2">
