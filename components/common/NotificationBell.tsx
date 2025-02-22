@@ -40,10 +40,10 @@ export function NotificationBell() {
     return (
         <Popover>
             <PopoverTrigger asChild>
-                <Button size="icon" variant="outline" className="relative" aria-label="Open notifications">
+                <Button size="icon" variant="ghost" className="relative" aria-label="Open notifications">
                     <Bell size={16} strokeWidth={2} aria-hidden="true" />
                     {unreadCount > 0 && (
-                        <Badge className="absolute -top-2 left-full min-w-5 -translate-x-1/2 px-1">
+                        <Badge className="absolute -top-1 left-full min-w-1 -translate-x-2 p-1 py-0">
                             {unreadCount > 99 ? "99+" : unreadCount}
                         </Badge>
                     )}

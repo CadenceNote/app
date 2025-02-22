@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Home, Settings, LucideIcon, Building2, Clock, CheckSquare } from "lucide-react"
+import { Home, Settings, LucideIcon, Building2, Clock, CheckSquare, BookOpen } from "lucide-react"
 import { usePathname } from 'next/navigation';
 import { NavMain } from "@/components/sidebar/nav-main"
 import { NavUser } from "@/components/sidebar/nav-user"
@@ -40,9 +40,9 @@ const personalItems = [
 
 const getSettingsItems = () => [
   {
-    title: "Settings",
-    url: "/dashboard/settings",
-    icon: Settings,
+    title: "Tutorial",
+    url: "/tutorial",
+    icon: BookOpen,
   },
 ];
 

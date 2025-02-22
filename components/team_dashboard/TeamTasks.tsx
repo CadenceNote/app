@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Task } from "@/lib/types/task";
 import { useTask } from "@/hooks/useTask";
 import { TaskList } from "@/components/tasks/TaskList";
-import { PlusCircle, Eye } from "lucide-react";
+import { PlusCircle, Eye, Plus } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { CreateTaskModal } from "./CreateTaskModal";
 import { TaskDetail } from "@/components/tasks/TaskDetail";
@@ -72,8 +72,8 @@ export default function TeamTasks({ teamId, searchTerm }: TeamTasksProps) {
                                     <h2 className="text-lg font-semibold">
                                         {tab === "all" ? "All Tasks" : tab === "assigned" ? "Tasks Assigned to Me" : "Tasks I'm Watching"}
                                     </h2>
-                                    <Button onClick={() => setIsCreateModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 dark:text-white">
-                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                    <Button onClick={() => setIsCreateModalOpen(true)} className="">
+                                        <Plus className="mr-2 h-4 w-4" />
                                         New Task
                                     </Button>
                                 </div>

@@ -13,22 +13,19 @@ import TeamAlerts from "@/components/team_dashboard/TeamAlerts"
 import TeamEvents from "@/components/team_dashboard/TeamEvents"
 import TeamTasks from "@/components/team_dashboard/TeamTasks"
 import TeamMeetings from "@/components/team_dashboard/TeamMeetings"
-import TeamHeader from "@/components/team_dashboard/TeamHeader"
+import DashboardHeader from "@/components/header/DashboardHeader"
 import { useState } from "react"
+import { useTeams } from "@/hooks/useTeams"
 
 export default function TeamDashboard({ params }: { params: Promise<{ teamId: string }> }) {
     const resolvedParams = use(params);
     const teamId = parseInt(resolvedParams.teamId);
     const [date, setDate] = useState<Date>();
     const [searchTerm, setSearchTerm] = useState("");
-
+    const { teams } = useTeams()
+    const currentTeam = teams?.find(t => t.id === teamId)
     return (
         <div className="h-full flex flex-col">
-            <TeamHeader
-                teamId={teamId}
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-            />
 
             <div className="flex-1 container mx-auto py-6 space-y-8">
                 {/* Stats Row */}
@@ -40,11 +37,11 @@ export default function TeamDashboard({ params }: { params: Promise<{ teamId: st
                     <div className="lg:col-span-2 space-y-6">
                         <AIAssistant teamId={teamId} />
 
-                        <div className="border rounded-lg bg-white/70 backdrop-blur-sm">
+                        <div className="">
                             <TeamTasks searchTerm={searchTerm} teamId={teamId} />
                         </div>
 
-                        <div className="border rounded-lg bg-white/70 backdrop-blur-sm">
+                        <div className="">
                             <TeamMeetings teamId={teamId} />
                         </div>
                     </div>
@@ -56,7 +53,7 @@ export default function TeamDashboard({ params }: { params: Promise<{ teamId: st
                             setDate={setDate}
                             teamId={teamId}
                         />
-                        <TeamAlerts teamId={teamId} />
+                        {/* <TeamAlerts teamId={teamId} /> */}
                     </div>
                 </div>
             </div>

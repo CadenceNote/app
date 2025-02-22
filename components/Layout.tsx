@@ -21,6 +21,11 @@ const Layout = ({ children }) => {
     const router = useRouter()
     const [user, setUser] = useState(null)
     const { theme, setTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
 
     useEffect(() => {
         const checkUser = async () => {
@@ -56,10 +61,10 @@ const Layout = ({ children }) => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                    <Link href="/profile">Profile Settings</Link>
+                    <Link href="/dashboard/settings">Account Settings</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleSignOut}>
-                    Sign Out
+                    <span className="text-red-500">Sign Out</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
@@ -89,8 +94,8 @@ const Layout = ({ children }) => {
                                 Support
                             </Link>
 
-                            <Link href="/contact" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
-                                Contact
+                            <Link href="/join-us" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
+                                Join Us
                             </Link>
 
                         </nav>
@@ -112,9 +117,20 @@ const Layout = ({ children }) => {
                                 </Button>
                             </>
                         )}
-                        <Button size="sm" variant="ghost" className="gap-2" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-                            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                        </Button>
+                        {mounted && (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="gap-2"
+                                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                            >
+                                {theme === "dark" ? (
+                                    <Sun className="h-4 w-4" />
+                                ) : (
+                                    <Moon className="h-4 w-4" />
+                                )}
+                            </Button>
+                        )}
                     </div>
                 </div>
             </header>

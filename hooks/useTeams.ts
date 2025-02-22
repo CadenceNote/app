@@ -4,11 +4,12 @@ import { notificationService } from '@/services/notificationService';
 import { notificationPreferencesService } from '@/services/notificationPreferencesService';
 import { Team, CreateTeamInput, UpdateTeamInput, AddTeamMemberInput } from '@/lib/types/team';
 import { useUser } from './useUser';
+import { supabase } from '@/lib/supabase';
 
 // Simplified cache keys
 export const teamKeys = {
     all: () => ['teams'],
-    userTeams: (userId?: number) => [...teamKeys.all(), 'user', userId],
+    userTeams: (userId?: string) => [...teamKeys.all(), 'user', userId],
     teamDetail: (teamId?: number) => [...teamKeys.all(), 'detail', teamId],
 };
 
@@ -25,8 +26,57 @@ export function useTeams() {
     } = useSWR<Team[]>(
         teamKeys.userTeams(userId),
         async () => {
-            const teams = await teamApi.getUserTeams(userId);
-            return teams;
+            if (!userId) return [];
+            const { data: teamMemberships, error: membershipError } = await supabase
+                .from('team_members')
+                .select('team_id')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
+
+            if (membershipError) throw membershipError;
+            if (!teamMemberships?.length) return [];
+
+            const teamIds = teamMemberships.map(tm => tm.team_id);
+
+            const { data: teams, error } = await supabase
+                .from('teams')
+                .select(`
+                    *,
+                    members:team_members(
+                        id,
+                        team_id,
+                        user_id,
+                        role,
+                        created_at,
+                        users(
+                            supabase_uid,
+                            email,
+                            full_name
+                        )
+                    )
+                `)
+                .in('id', teamIds)
+                .eq('is_active', true)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            // Transform the data to match our interface
+            return teams.map(team => ({
+                ...team,
+                members: team.members.map((member: any) => ({
+                    id: member.id,
+                    team_id: member.team_id,
+                    user_id: member.user_id,
+                    role: member.role,
+                    created_at: member.created_at,
+                    user: {
+                        id: member.users.supabase_uid,
+                        email: member.users.email,
+                        full_name: member.users.full_name
+                    }
+                }))
+            }));
         },
         {
             revalidateOnFocus: true,

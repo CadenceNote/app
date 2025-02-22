@@ -121,7 +121,7 @@ export function NavMain({ items }: NavMainProps) {
       </SidebarGroup>
 
       <SidebarGroup>
-        <SidebarGroupLabel>Settings</SidebarGroupLabel>
+        <SidebarGroupLabel>Quick Start</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>
             {items.others.map((item) => (

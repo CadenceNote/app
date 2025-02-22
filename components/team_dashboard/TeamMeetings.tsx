@@ -286,7 +286,7 @@ export default function TeamMeetings({ teamId }: TeamMeetingsProps) {
     }
 
     return (
-        <Card className="space-y-6 dark:border-gray-800">
+        <Card className="space-y-6">
             <CardHeader>
                 <div className="flex items-center justify-between">
                     <div>
@@ -295,7 +295,7 @@ export default function TeamMeetings({ teamId }: TeamMeetingsProps) {
                             Schedule and manage team meetings
                         </CardDescription>
                     </div>
-                    <Button onClick={handleCreateModalOpen} className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 dark:text-white">
+                    <Button onClick={handleCreateModalOpen} className="">
                         <Plus className="mr-2 h-4 w-4" />
                         Schedule Meeting
                     </Button>
@@ -414,7 +414,7 @@ export default function TeamMeetings({ teamId }: TeamMeetingsProps) {
                                 <Button type="button" variant="outline" onClick={handleCreateModalClose}>
                                     Cancel
                                 </Button>
-                                <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700">
+                                <Button type="submit" className="">
                                     Schedule Meeting
                                 </Button>
                             </div>

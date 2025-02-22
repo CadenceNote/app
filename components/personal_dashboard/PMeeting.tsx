@@ -436,7 +436,7 @@ export default function PMeeting() {
                                         </div>
                                     )}
                                 </div>
-                                <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700" disabled={!selectedCreateTeam || !selectedDate}>
+                                <Button type="submit" className="w-full" disabled={!selectedCreateTeam || !selectedDate}>
                                     Schedule Meeting
                                 </Button>
                             </form>

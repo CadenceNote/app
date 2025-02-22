@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge"
 import { format, parseISO } from "date-fns"
 import { differenceInDays } from "date-fns"
 import { NotificationBell } from "@/components/common/NotificationBell"
+import DashboardHeader from "@/components/header/DashboardHeader"
 export default function DashboardPage() {
     const [searchTerm, setSearchTerm] = useState("")
     const [activeSection, setActiveSection] = useState('summary-section')
@@ -61,62 +62,12 @@ export default function DashboardPage() {
     }, [teams, tasks, meetings, tasksError, meetingsError, toast]);
 
     return (
-        <div className="h-screen">
+        <div className="">
             <Suspense fallback={<h3 className="text-center text-2xl font-bold">Loading...</h3>}>
                 <main className="h-full overflow-y-auto">
-                    {/* Top Navigation Bar */}
-                    <div className="border-b ">
-                        <div className="flex items-center h-14 px-4">
-                            {/* Left section */}
-                            <div className="flex-none flex items-center space-x-4">
-                                <SidebarTrigger />
-                                <Separator orientation="vertical" className="h-6" />
-                                <h1 className="text-xl font-semibold text-gray-700 dark:text-gray-200">My Dashboard</h1>
-                            </div>
-
-                            {/* Center section - Search */}
-                            <div className="flex-1 flex justify-center px-4">
-                                <div className="w-full max-w-2xl">
-                                    <input
-                                        type="text"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        placeholder="Search..."
-                                        className="w-full px-3 py-2 border dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-400"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Right section */}
-                            <div className="flex-none flex items-center space-x-2">
-                                <div className="relative">
-                                    <NotificationBell />
-                                </div>
-                                {/* <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                                            <UserAvatar
-                                                name={user?.full_name || 'User'}
-                                                imageUrl={user?.avatar_url}
-                                                className="h-8 w-8"
-                                            />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/dashboard/profile')}>Profile</DropdownMenuItem>
-                                        <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/dashboard/settings')}>Settings</DropdownMenuItem>
-                                        <DropdownMenuItem className="cursor-pointer" onClick={() => handleSignOut(router)}>Logout</DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu> */}
-                            </div>
-                        </div>
-                    </div>
 
                     {/* Dashboard Content */}
                     <div className="w-full mx-auto px-4 sm:px-6 lg:px-40 py-6 space-y-6">
-                        <h1 className="text-3xl font-bold tracking-tight dark:text-white"> My Dashboard</h1>
                         <div className="space-y-6" id="summary-section">
                             {/* Quick Stats Row */}
                             <div className="grid gap-6 md:grid-cols-4">
@@ -204,8 +155,8 @@ export default function DashboardPage() {
                                     <AIAssistant />
 
                                     {/* Tasks Section */}
-                                    <div className="border-indigo-500 border-1 rounded-lg bg-white/70 backdrop-blur-sm hover:shadow-lg transition-all duration-300" id="tasks-section">
-                                        <div className="bg-white rounded-lg shadow-sm">
+                                    <div className="" id="tasks-section">
+                                        <div className="">
                                             <PTask
                                                 searchTerm={searchTerm}
                                             />

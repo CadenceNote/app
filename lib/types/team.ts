@@ -1,14 +1,15 @@
-export type TeamRole = 'member' | 'admin' | 'meeting_manager';
+export type TeamRole = 'ADMIN' | 'MEMBER' | 'VIEWER';
 
 export interface TeamMember {
     id: number;
-    user_id: number;
-    name: string;
-    role: string;
+    team_id: number;
+    user_id: string;
+    role: TeamRole;
+    created_at: string;
     user: {
-        id: number;
-        full_name: string;
+        id: string;
         email: string;
+        full_name: string;
     };
 }
 
@@ -19,7 +20,7 @@ export interface Team {
     created_at: string;
     updated_at?: string;
     is_active: boolean;
-    members?: TeamMember[];
+    members: TeamMember[];
 }
 
 export interface CreateTeamInput {

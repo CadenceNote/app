@@ -173,7 +173,7 @@ export default function AIAssistant({ teamId = -1 }: AIAssistantProps) {
     };
 
     return (
-        <Card className="border-indigo-100 bg-white/70 dark:bg-black/70 dark:border-indigo-900 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
+        <Card className="">
             <CardHeader>
                 <div className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5" />
@@ -247,8 +247,8 @@ export default function AIAssistant({ teamId = -1 }: AIAssistantProps) {
                                 ) : (
                                     <div
                                         className={`rounded-2xl px-4 py-3 max-w-[80%] ${message.type === 'user'
-                                            ? 'bg-primary text-white rounded-tr-none ml-auto'
-                                            : 'bg-indigo-400 text-white rounded-tl-none mr-auto'
+                                            ? 'bg-primary dark:bg-secondary/90 text-white rounded-tr-none ml-auto'
+                                            : 'bg-primary/90 dark:bg-secondary/80 text-white rounded-tl-none mr-auto'
                                             }`}
                                     >
                                         <p className={`text-sm 
@@ -272,7 +272,7 @@ export default function AIAssistant({ teamId = -1 }: AIAssistantProps) {
                             onChange={(e) => setInputValue(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                             placeholder="Ask me anything about your work..."
-                            className="flex-1 px-4 py-2 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            className="flex-1 px-4 py-2 rounded-full border border-gray-200 dark:border-primary/50 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-800 focus:border-transparent"
                             disabled={isAiResponding}
                         />
                         <Button
