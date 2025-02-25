@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { OneTapComponent } from "@/components/auth/Google"
 
 interface SignUpFormProps extends React.ComponentPropsWithoutRef<"form"> {
     className?: string
@@ -252,6 +253,7 @@ export function SignUpForm({ className, ...props }: SignUpFormProps) {
                 )}
                 GitHub
             </Button>
+            <OneTapComponent />
             <div className="text-center text-sm text-muted-foreground">
                 Already have an account?{" "}
                 <a
