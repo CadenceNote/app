@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Icons } from "@/components/ui/icons"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { OneTapComponent } from "@/components/auth/Google"
 import { useToast } from "@/hooks/use-toast"
@@ -19,9 +19,44 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
   const { toast } = useToast()
+
+  // Clear errors when inputs change
+  useEffect(() => {
+    if (email && errors.email) {
+      setErrors(prev => ({ ...prev, email: undefined }))
+    }
+    if (password && errors.password) {
+      setErrors(prev => ({ ...prev, password: undefined }))
+    }
+  }, [email, password, errors.email, errors.password])
+
+  // Validate form
+  const validateForm = (): boolean => {
+    const newErrors: { email?: string; password?: string } = {}
+
+    if (!email) {
+      newErrors.email = "Email is required"
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      newErrors.email = "Please enter a valid email address"
+    }
+
+    if (!password) {
+      newErrors.password = "Password is required"
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
+
+    if (!validateForm()) {
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -31,6 +66,12 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
       })
 
       if (error) {
+        if (error.message.includes("Invalid login credentials")) {
+          setErrors({
+            password: "Invalid email or password. Please try again."
+          })
+          throw new Error("Invalid login credentials")
+        }
         throw error
       }
 
@@ -44,7 +85,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
       console.error("Login error:", error)
       toast({
         title: "Error",
-        description: "Failed to login. Please check your credentials.",
+        description: error instanceof Error ? error.message : "Failed to login. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -71,7 +112,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
       console.error("GitHub login error:", error)
       toast({
         title: "Error",
-        description: "Failed to login with GitHub",
+        description: error instanceof Error ? error.message : "Failed to login with GitHub",
         variant: "destructive",
       })
     } finally {
@@ -90,7 +131,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
     console.error("Authentication error:", error)
     toast({
       title: "Error",
-      description: "Authentication failed. Please try again.",
+      description: error.message || "Authentication failed. Please try again.",
       variant: "destructive",
     })
   }
@@ -110,7 +151,15 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
             disabled={isLoading}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "email-error" : undefined}
+            className={errors.email ? "border-red-500" : ""}
           />
+          {errors.email && (
+            <p id="email-error" className="text-sm text-red-500">
+              {errors.email}
+            </p>
+          )}
         </div>
         <div className="grid gap-2">
           <div className="flex items-center justify-between">
@@ -128,9 +177,17 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
             disabled={isLoading}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            aria-invalid={!!errors.password}
+            aria-describedby={errors.password ? "password-error" : undefined}
+            className={errors.password ? "border-red-500" : ""}
           />
+          {errors.password && (
+            <p id="password-error" className="text-sm text-red-500">
+              {errors.password}
+            </p>
+          )}
         </div>
-        <Button disabled={isLoading}>
+        <Button type="submit" disabled={isLoading}>
           {isLoading && (
             <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
           )}

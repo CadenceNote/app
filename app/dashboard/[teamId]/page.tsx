@@ -25,9 +25,9 @@ export default function TeamDashboard({ params }: { params: Promise<{ teamId: st
     const { teams } = useTeams()
     const currentTeam = teams?.find(t => t.id === teamId)
     return (
-        <div className="h-full flex flex-col">
+        <div className="w-full mx-auto px-4 sm:px-6 lg:px-40 py-6 space-y-6">
 
-            <div className="flex-1 container mx-auto py-6 space-y-8">
+            <div className="flex-1 mx-auto space-y-8">
                 {/* Stats Row */}
                 <TeamStats teamId={teamId} />
 

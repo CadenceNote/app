@@ -444,6 +444,23 @@ export default function TeamMeetings({ teamId }: TeamMeetingsProps) {
                         teamId={teamId}
                     />
                 )}
+
+                {/* Empty State */}
+                {groupedMeetings.current.length === 0 &&
+                    groupedMeetings.today.length === 0 &&
+                    groupedMeetings.tomorrow.length === 0 &&
+                    groupedMeetings.thisWeek.length === 0 &&
+                    groupedMeetings.upcoming.length === 0 && (
+                        <EmptyState
+                            title="No upcoming meetings"
+                            description="Schedule a meeting to collaborate with your team"
+                            action={
+                                <Button onClick={handleCreateModalOpen} >
+                                    <Plus className="mr-2 h-4 w-4" /> Schedule Meeting
+                                </Button>
+                            }
+                        />
+                    )}
             </CardContent>
         </Card>
     );

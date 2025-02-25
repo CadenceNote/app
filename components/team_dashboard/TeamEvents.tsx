@@ -253,10 +253,7 @@ export default function TeamEvents({ date, setDate, teamId }: TeamEventsProps) {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-x-2">
                     <CardTitle>Calendar</CardTitle>
-                    <Button variant="outline" size="sm" className="whitespace-nowrap">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Event
-                    </Button>
+
                 </CardHeader>
                 <CardContent className="p-0">
                     <div className="p-3">

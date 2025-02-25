@@ -90,7 +90,7 @@ export default function CreateTeamPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-indigo-50">
+        <div className="min-h-screen ">
             <div className="p-8">
                 <Button
                     variant="ghost"
@@ -208,7 +208,7 @@ export default function CreateTeamPage() {
 
                                 <Button
                                     type="submit"
-                                    className="w-full bg-gradient-to-r from-green-500 via-blue-500 to-indigo-500 hover:from-green-500/95 hover:via-blue-500/95 hover:to-indigo-500/95 text-white"
+                                    className="w-full bg-gradient-to-r from-green-500 via-blue-500 to-indigo-500 hover:from-green-500/95 hover:via-blue-500/95 hover:to-indigo-500/95 text-white "
                                     disabled={isLoading}
                                 >
                                     {isLoading ? "Creating..." : "Create Team"}

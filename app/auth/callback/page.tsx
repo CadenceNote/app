@@ -18,7 +18,6 @@ export default function AuthCallback() {
     const { toast } = useToast()
     const [loading, setLoading] = useState(true)
     const [fullName, setFullName] = useState('')
-    const [avatarFile, setAvatarFile] = useState<File | null>(null)
     const [cropFile, setCropFile] = useState<File | null>(null)
     const [showProfileForm, setShowProfileForm] = useState(false)
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -43,8 +42,8 @@ export default function AuthCallback() {
                     return
                 }
 
-                // User exists and has full profile, redirect to dashboard
-                router.push('/dashboard')
+                // User exists and has full profile, redirect to tutorial page
+                router.push('/tutorial')
             } catch (error) {
                 console.error('Error in auth callback:', error)
                 toast({
@@ -118,7 +117,11 @@ export default function AuthCallback() {
                     email: user.email,
                     full_name: fullName,
                     avatar_url: avatarUrl,
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString(),
+                    is_active: true,
+                    theme: 'light',
+                    locale: 'en',
+                    created_at: new Date().toISOString()
                 })
 
             if (updateError) throw updateError
@@ -131,7 +134,8 @@ export default function AuthCallback() {
             // Clear the user cache to ensure fresh data
             userApi.clearUserCache(user.id)
 
-            router.push('/dashboard')
+            // Redirect to tutorial page instead of dashboard
+            router.push('/tutorial')
         } catch (error) {
             console.error('Error updating profile:', error)
             toast({

@@ -80,7 +80,7 @@ export const OneTapComponent: React.FC<OneTapComponentProps> = ({ onSuccess, onE
             if (sessionData.session) {
                 const user = await userApi.getCurrentUser()
                 if (!user || !user.full_name) {
-                    router.push('/auth/ ')
+                    router.push('/auth/callback')
                     return
                 }
                 router.push('/dashboard')
@@ -148,7 +148,9 @@ export const OneTapComponent: React.FC<OneTapComponentProps> = ({ onSuccess, onE
                 src="https://accounts.google.com/gsi/client"
                 async
                 defer
-                onLoad={() => initializeGoogleOneTap()}
+                onLoad={() => {
+                    initializeGoogleOneTap()
+                }}
                 strategy="afterInteractive"
             />
             <div id="oneTap" className="fixed top-0 right-0 z-[100]" />

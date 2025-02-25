@@ -80,7 +80,7 @@ export default function Home() {
                 <div className="inline-flex items-center rounded-full border bg-background/95 px-6 py-2 text-sm font-medium backdrop-blur-sm">
                   <span className="flex items-center gap-2">
                     <Zap className="h-4 w-4 text-primary" />
-                    Team Collaboration and Management Tools
+                    (Beta) Team Collaboration and Management Tools
                   </span>
                 </div>
               </div>

@@ -46,7 +46,7 @@ export default function SupportPage() {
                     items={faqItems}
                     contactInfo={{
                         title: "Still need help?",
-                        description: "Our support team is here to assist you with any questions or concerns",
+                        description: "Our support team is here to assist you with any questions or concerns (temporarily, for any problems/inqueries/suggestions, please contact evan.hhuang@outlook.com",
                         buttonText: "Contact Support",
                         onContact: () => {
                             toast({
