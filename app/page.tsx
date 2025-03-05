@@ -93,12 +93,16 @@ export default function Home() {
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 {isLoading ? null : !user ? (
                   <>
-                    <Button size="lg" className="h-12 min-w-[200px] rounded-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary">
-                      Get Started
-                    </Button>
-                    <Button size="lg" variant="outline" className="h-12 min-w-[200px] rounded-full">
-                      Learn more
-                    </Button>
+                    <Link href="/signup">
+                      <Button size="lg" className="h-12 min-w-[200px] rounded-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary" >
+                        Get Started
+                      </Button>
+                    </Link>
+                    <Link href="/documentation">
+                      <Button size="lg" variant="outline" className="h-12 min-w-[200px] rounded-full">
+                        Learn more
+                      </Button>
+                    </Link>
                   </>
                 ) : (
                   <Button size="lg" className="h-12 min-w-[200px] rounded-full bg-gradient-to-r from-primary to-primary/90">
